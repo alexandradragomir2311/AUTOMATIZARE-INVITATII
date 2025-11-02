@@ -9,7 +9,7 @@ from email.utils import formataddr
 
 def send_confirmation_response(guest_name: str, guest_email: str, response_type: str) -> bool:
     """
-    Trimite răspuns automat pentru confirmări/declinări
+    Trimite răspuns automat pentru confirmări/declinări PRIN SMTP evenimente@unbr.ro
     
     Args:
         guest_name: Numele invitatului
@@ -20,16 +20,18 @@ def send_confirmation_response(guest_name: str, guest_email: str, response_type:
         bool: True dacă emailul a fost trimis cu succes
     """
     try:
+        # Folosește SMTP direct cu evenimente@unbr.ro
+        from smtp_utils import send_email2_smtp, get_email_config
         config = get_email_config()
         
-        if not config.email_password:
-            print("Eroare: Nu am putut obține parola pentru email")
+        if not config or not config.email_password:
+            print("Eroare: Nu am putut obține configurația email")
             return False
         
         # Creează emailul de răspuns
         message = create_confirmation_response_email(guest_name, response_type, guest_email)
         
-        # Trimite emailul prin SMTP
+        # Trimite emailul prin SMTP evenimente@unbr.ro
         with smtplib.SMTP(config.smtp_server, config.smtp_port) as server:
             if config.smtp_use_tls:
                 server.starttls()
@@ -37,19 +39,16 @@ def send_confirmation_response(guest_name: str, guest_email: str, response_type:
             server.login(config.email_address, config.email_password)
             server.send_message(message)
         
-        print(f"✅ Răspuns {response_type} trimis către {guest_email}")
+        print(f"✅ Răspuns {response_type} trimis către {guest_email} prin SMTP {config.smtp_server}")
         
-        # Salvează în folderul de confirmări
-        if config.organize_by_folders:
-            try:
-                save_sent_email_to_folder(message, config, response_type)
-                print(f"📁 Răspuns salvat în folderul '{config.confirmations_folder_name}'")
-            except Exception as e:
-                print(f"⚠️  Răspuns trimis dar nu s-a salvat în foldere: {e}")
+        # NU salvăm în foldere Gmail (folosim SMTP, nu Gmail API)
+        # if config.organize_by_folders:
+        #     save_sent_email_to_folder(message, config, response_type)
         
         # Actualizează statusul în Google Sheets
         confirmation_status = "yes" if response_type == "confirmare" else "no"
         update_guest_status(guest_email, confirmation=confirmation_status)
+        print(f"📊 Google Sheet actualizat pentru {guest_email}: {confirmation_status}")
         
         return True
         
