@@ -309,7 +309,17 @@ def confirm():
                     sheet.format(f"H{row_index + 1}", {"backgroundColor": {"red": 0.85, "green": 0.92, "blue": 0.83}})
             
             # Trimite email confirmare prin SMTP UNBR
-            send_confirmation_response(nume, email, "confirmare")
+            try:
+                print(f"📧 Attempting to send confirmation email to {email}...")
+                result = send_confirmation_response(nume, email, "confirmare")
+                if result:
+                    print(f"✅ Confirmation email sent successfully to {email}")
+                else:
+                    print(f"⚠️  Failed to send confirmation email to {email}")
+            except Exception as e:
+                print(f"❌ Error sending confirmation email: {e}")
+                import traceback
+                traceback.print_exc()
             
             # Determină titlul pentru mesaj
             if gen:
@@ -356,7 +366,17 @@ def confirm():
             sheet.format(f"H{row_index}", {"backgroundColor": {"red": 0.96, "green": 0.80, "blue": 0.80}})
             
             # Trimite email declinare prin SMTP UNBR
-            send_confirmation_response(nume, email, "declinare")
+            try:
+                print(f"📧 Attempting to send decline email to {email}...")
+                result = send_confirmation_response(nume, email, "declinare")
+                if result:
+                    print(f"✅ Decline email sent successfully to {email}")
+                else:
+                    print(f"⚠️  Failed to send decline email to {email}")
+            except Exception as e:
+                print(f"❌ Error sending decline email: {e}")
+                import traceback
+                traceback.print_exc()
             
             # Determină titlul pentru mesaj
             if gen:
