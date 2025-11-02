@@ -40,12 +40,27 @@ class EmailConfig:
     
     @classmethod
     def load_from_file(cls, credentials_file: str = 'credentials/email_credentials.txt'):
-        """Încarcă parola din fișier"""
+        """Încarcă parola din fișier SAU din environment variable"""
         config = cls()
+        
+        # Prioritate 1: Environment Variable (pentru Render.com)
+        env_password = os.getenv('EMAIL_PASSWORD', '')
+        if env_password:
+            config.email_password = env_password
+            config.smtp_server = os.getenv('SMTP_SERVER', 'mail.unbr.ro')
+            config.smtp_port = int(os.getenv('SMTP_PORT', '587'))
+            config.email_address = os.getenv('EMAIL_ADDRESS', 'evenimente@unbr.ro')
+            config.smtp_use_tls = os.getenv('SMTP_USE_TLS', 'true').lower() == 'true'
+            print(f"✅ Loaded SMTP config from environment variables")
+            return config
+        
+        # Prioritate 2: Fișier local (pentru dezvoltare locală)
         try:
             if os.path.exists(credentials_file):
                 with open(credentials_file, 'r', encoding='utf-8') as f:
                     config.email_password = f.read().strip()
+                print(f"✅ Loaded SMTP password from file: {credentials_file}")
         except Exception as e:
             print(f"Eroare la încărcarea credentialelor din fișier: {e}")
+        
         return config
