@@ -98,6 +98,7 @@ def update_sheet_background(token, response, persons=None):
     thread = threading.Thread(target=update, daemon=True)
     thread.start()
     print(f"🔄 Sheet thread started", flush=True)
+    return thread  # Returnează thread-ul pentru tracking
 
 def get_email_from_sheet(token):
     """Găsește emailul din Sheet după token"""
@@ -203,6 +204,7 @@ def send_notification_to_admin(guest_name, guest_email, persons, response_type):
     thread = threading.Thread(target=send, daemon=True)
     thread.start()
     print(f"🔄 Admin notification thread started", flush=True)
+    return thread  # Returnează thread-ul pentru tracking
 
 def send_email_background(to_email, subject, html_body):
     """Trimite email în thread separat - evenimente@unbr.ro SMTP"""
@@ -283,7 +285,7 @@ a:hover { opacity: 0.9; }
         
         # UPDATE GOOGLE SHEET ÎN BACKGROUND
         print(f"📊 Starting Sheet update thread...", flush=True)
-        update_sheet_background(token, 'da', persoane)
+        sheet_thread = update_sheet_background(token, 'da', persoane)
         
         # GĂSEȘTE DATELE INVITATULUI DIN SHEET
         print(f"📧 Getting guest info from sheet...", flush=True)
@@ -293,12 +295,17 @@ a:hover { opacity: 0.9; }
         
         # TRIMITE NOTIFICARE CĂTRE evenimente@unbr.ro (DUBLĂ VERIFICARE)
         print(f"📧 Sending notification to evenimente@unbr.ro...", flush=True)
-        send_notification_to_admin(
+        email_thread = send_notification_to_admin(
             guest_name,
             guest_email,
             persoane,
             'confirmare'
         )
+        
+        # AȘTEAPTĂ ca thread-urile să se execute (5 secunde)
+        import time
+        time.sleep(5)
+        print(f"⏰ Threads had 5 seconds to execute", flush=True)
         
         # RĂSPUNDE IMEDIAT
         return render_template_string("""
@@ -322,19 +329,24 @@ p { color: #666; }
     
     else:
         # UPDATE GOOGLE SHEET ÎN BACKGROUND
-        update_sheet_background(token, 'nu', None)
+        sheet_thread = update_sheet_background(token, 'nu', None)
         
         # GĂSEȘTE DATELE INVITATULUI DIN SHEET
         guest_email = get_email_from_sheet(token)
         guest_name = get_name_from_sheet(token)
         
         # TRIMITE NOTIFICARE CĂTRE evenimente@unbr.ro
-        send_notification_to_admin(
+        email_thread = send_notification_to_admin(
             guest_name,
             guest_email,
             '0',
             'declinare'
         )
+        
+        # AȘTEAPTĂ ca thread-urile să se execute (5 secunde)
+        import time
+        time.sleep(5)
+        print(f"⏰ Threads had 5 seconds to execute", flush=True)
         
         # RĂSPUNDE IMEDIAT
         return render_template_string("""
