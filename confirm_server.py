@@ -113,6 +113,85 @@ def get_email_from_sheet(token):
     except:
         return 'alexandradragomir23@yahoo.com'
 
+def get_name_from_sheet(token):
+    """Găsește numele complet din Sheet după token"""
+    try:
+        creds = get_credentials()
+        client = gspread.authorize(creds)
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        sheet = spreadsheet.worksheet(SHEET_NAME)
+        all_data = sheet.get_all_values()
+        
+        for row in all_data[1:]:
+            if len(row) > 9 and row[9] == token:
+                nume = row[0] if len(row) > 0 else ''
+                prenume = row[1] if len(row) > 1 else ''
+                return f"{nume} {prenume}".strip()
+        return 'Invitat'
+    except:
+        return 'Invitat'
+
+def send_notification_to_admin(guest_name, guest_email, persons, response_type):
+    """Trimite notificare către evenimente@unbr.ro când cineva confirmă"""
+    def send():
+        try:
+            print(f"📧 Preparing admin notification...", flush=True)
+            
+            # Construiește mesajul
+            if response_type == 'confirmare':
+                subject = f"✅ CONFIRMARE: {guest_name} - {persons} {'persoană' if persons == '1' else 'persoane'}"
+                html_body = f"""
+                <html><body style="font-family: Arial; padding: 20px;">
+                <h2 style="color: #4CAF50;">✅ Confirmare Primită</h2>
+                <p><strong>Nume:</strong> {guest_name}</p>
+                <p><strong>Email:</strong> {guest_email}</p>
+                <p><strong>Număr persoane:</strong> {persons}</p>
+                <p><strong>Data confirmării:</strong> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}</p>
+                <hr>
+                <p style="color: #666; font-size: 12px;">Verificați Google Sheet pentru detalii complete.</p>
+                </body></html>
+                """
+            else:
+                subject = f"❌ DECLINARE: {guest_name}"
+                html_body = f"""
+                <html><body style="font-family: Arial; padding: 20px;">
+                <h2 style="color: #f44336;">❌ Nu Participă</h2>
+                <p><strong>Nume:</strong> {guest_name}</p>
+                <p><strong>Email:</strong> {guest_email}</p>
+                <p><strong>Data răspunsului:</strong> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}</p>
+                <hr>
+                <p style="color: #666; font-size: 12px;">Verificați Google Sheet pentru detalii complete.</p>
+                </body></html>
+                """
+            
+            msg = MIMEMultipart('alternative')
+            msg['From'] = EMAIL_ADDRESS
+            msg['To'] = EMAIL_ADDRESS  # Trimite către tine însuți!
+            msg['Subject'] = subject
+            msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+            
+            # Trimite prin SMTP
+            print(f"📧 Connecting to SMTP {SMTP_SERVER}:{SMTP_PORT}...", flush=True)
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+                print(f"📧 Connected! Starting TLS={SMTP_USE_TLS}...", flush=True)
+                if SMTP_USE_TLS:
+                    server.starttls()
+                    print(f"📧 TLS started, logging in...", flush=True)
+                server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+                print(f"📧 Logged in, sending admin notification...", flush=True)
+                server.send_message(msg)
+            print(f"✅ Notificare trimisă către {EMAIL_ADDRESS}", flush=True)
+        except Exception as e:
+            print(f"❌ Admin notification error: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+    
+    # Start în background thread
+    print(f"🔄 Launching admin notification thread...", flush=True)
+    thread = threading.Thread(target=send, daemon=True)
+    thread.start()
+    print(f"🔄 Admin notification thread started", flush=True)
+
 def send_email_background(to_email, subject, html_body):
     """Trimite email în thread separat - evenimente@unbr.ro SMTP"""
     def send():
@@ -194,17 +273,19 @@ a:hover { opacity: 0.9; }
         print(f"📊 Starting Sheet update thread...", flush=True)
         update_sheet_background(token, 'da', persoane)
         
-        # GĂSEȘTE EMAIL DIN SHEET
-        print(f"📧 Getting email from sheet...", flush=True)
+        # GĂSEȘTE DATELE INVITATULUI DIN SHEET
+        print(f"📧 Getting guest info from sheet...", flush=True)
         guest_email = get_email_from_sheet(token)
-        print(f"📧 Found email: {guest_email}", flush=True)
+        guest_name = get_name_from_sheet(token)
+        print(f"📧 Found: {guest_name} ({guest_email})", flush=True)
         
-        # TRIMITE EMAIL ÎN BACKGROUND
-        print(f"📧 Starting email send thread...", flush=True)
-        send_email_background(
+        # TRIMITE NOTIFICARE CĂTRE evenimente@unbr.ro (DUBLĂ VERIFICARE)
+        print(f"📧 Sending notification to evenimente@unbr.ro...", flush=True)
+        send_notification_to_admin(
+            guest_name,
             guest_email,
-            '✅ Confirmare - Concert UNBR',
-            f'<h2>Confirmat pentru {persoane} {'persoană' if persoane == '1' else 'persoane'}</h2><p>Vă mulțumim! Veți primi biletul în curând.</p>'
+            persoane,
+            'confirmare'
         )
         
         # RĂSPUNDE IMEDIAT
@@ -231,14 +312,16 @@ p { color: #666; }
         # UPDATE GOOGLE SHEET ÎN BACKGROUND
         update_sheet_background(token, 'nu', None)
         
-        # GĂSEȘTE EMAIL DIN SHEET
+        # GĂSEȘTE DATELE INVITATULUI DIN SHEET
         guest_email = get_email_from_sheet(token)
+        guest_name = get_name_from_sheet(token)
         
-        # TRIMITE EMAIL ÎN BACKGROUND
-        send_email_background(
+        # TRIMITE NOTIFICARE CĂTRE evenimente@unbr.ro
+        send_notification_to_admin(
+            guest_name,
             guest_email,
-            'Răspuns - Concert UNBR',
-            '<h2>Răspuns înregistrat</h2><p>Ne pare rău că nu puteți participa.</p>'
+            '0',
+            'declinare'
         )
         
         # RĂSPUNDE IMEDIAT
