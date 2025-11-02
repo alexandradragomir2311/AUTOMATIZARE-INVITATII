@@ -226,13 +226,16 @@ def confirm():
             color='#f44336')
     
     # Verifică deadline
+    print(f"⏰ DEBUG: Checking deadline... Current time: {datetime.now()}, Deadline: {DEADLINE}")
     if datetime.now() > DEADLINE:
+        print("❌ DEBUG: Deadline expired!")
         return render_template_string(SUCCESS_PAGE,
             title='Termen expirat',
             icon='⏰',
             message='Termenul limită pentru confirmări a expirat (10 noiembrie 2025). Pentru modificări, vă rugăm să contactați organizatorii.',
             color='#ff9800')
     
+    print("✅ DEBUG: Deadline OK, proceeding...")
     try:
         print(f"🔍 DEBUG: Starting confirmation process for token: {token}, resp: {resp}, persoane: {persoane}")
         sheet = get_sheet()
