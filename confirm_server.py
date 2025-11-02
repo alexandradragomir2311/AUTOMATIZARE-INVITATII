@@ -210,13 +210,14 @@ SUCCESS_PAGE = """
 
 @app.route('/confirm', methods=['GET'])
 def confirm():
-    print("=" * 80)
-    print("🚀 CONFIRM ROUTE CALLED!")
-    print("=" * 80)
+    import sys
+    print("=" * 80, file=sys.stderr)
+    print("🚀🚀🚀 CONFIRM ROUTE CALLED - VERSION 3.0!", file=sys.stderr)
+    print("=" * 80, file=sys.stderr)
     token = request.args.get('token')
     resp = request.args.get('resp')
     persoane = request.args.get('persoane')
-    print(f"📥 Received: token={token}, resp={resp}, persoane={persoane}")
+    print(f"📥 Received: token={token}, resp={resp}, persoane={persoane}", file=sys.stderr)
     
     if not token:
         return render_template_string(SUCCESS_PAGE, 
