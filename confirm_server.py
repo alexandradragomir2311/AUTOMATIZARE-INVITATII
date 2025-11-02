@@ -244,6 +244,7 @@ def confirm():
                 nume = row[0]  # Coloana A
                 gen = row[3]   # Coloana D (Gen) - index 3 nu 1!
                 email = row[4]  # Coloana E
+                print(f"🔍 Found guest: {nume}, email: {email}, resp: {resp}, persoane: {persoane}")
                 break
         
         if not row_index:
