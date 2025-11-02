@@ -324,15 +324,16 @@ def confirm():
                     sheet.update_cell(row_index + 1, 10, token)  # Același token ca rândul 1
                     sheet.format(f"H{row_index + 1}", {"backgroundColor": {"red": 0.85, "green": 0.92, "blue": 0.83}})
             
-            # Trimite email confirmare prin SMTP UNBR
-            print(f"📧 Attempting to send confirmation email to {email}...")
-            print(f"🔧 DEBUG: Calling send_confirmation_response('{nume}', '{email}', 'confirmare')")
-            result = send_confirmation_response(nume, email, "confirmare")
-            print(f"🔧 DEBUG: send_confirmation_response returned: {result}")
-            if result:
-                print(f"✅ Confirmation email sent successfully to {email}")
-            else:
-                print(f"⚠️  Failed to send confirmation email to {email}")
+            # Trimite email confirmare prin SMTP UNBR - SIMPLU CA PE GMAIL!
+            try:
+                from smtp_utils import send_email_smtp
+                from email_organization import create_confirmation_response_email
+                
+                msg = create_confirmation_response_email(nume, "confirmare", email)
+                send_email_smtp(msg, email)
+                print(f"✅ Email confirmare trimis către {email}", file=sys.stderr)
+            except Exception as email_error:
+                print(f"❌ EROARE email: {email_error}", file=sys.stderr)
             
             # Determină titlul pentru mesaj
             if gen:
@@ -378,15 +379,16 @@ def confirm():
             sheet.update_cell(row_index, 9, '-')
             sheet.format(f"H{row_index}", {"backgroundColor": {"red": 0.96, "green": 0.80, "blue": 0.80}})
             
-            # Trimite email declinare prin SMTP UNBR
-            print(f"📧 Attempting to send decline email to {email}...")
-            print(f"🔧 DEBUG: Calling send_confirmation_response('{nume}', '{email}', 'declinare')")
-            result = send_confirmation_response(nume, email, "declinare")
-            print(f"🔧 DEBUG: send_confirmation_response returned: {result}")
-            if result:
-                print(f"✅ Decline email sent successfully to {email}")
-            else:
-                print(f"⚠️  Failed to send decline email to {email}")
+            # Trimite email declinare prin SMTP UNBR - SIMPLU CA PE GMAIL!
+            try:
+                from smtp_utils import send_email_smtp
+                from email_organization import create_confirmation_response_email
+                
+                msg = create_confirmation_response_email(nume, "declinare", email)
+                send_email_smtp(msg, email)
+                print(f"✅ Email declinare trimis către {email}", file=sys.stderr)
+            except Exception as email_error:
+                print(f"❌ EROARE email: {email_error}", file=sys.stderr)
             
             # Determină titlul pentru mesaj
             if gen:
