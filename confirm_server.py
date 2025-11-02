@@ -236,13 +236,15 @@ def confirm():
             message='Termenul limită pentru confirmări a expirat (10 noiembrie 2025). Pentru modificări, vă rugăm să contactați organizatorii.',
             color='#ff9800')
     
-    print("✅ DEBUG: Deadline OK, proceeding...")
+    print("✅ DEBUG: Deadline OK, proceeding...", file=sys.stderr)
     try:
-        print(f"🔍 DEBUG: Starting confirmation process for token: {token}, resp: {resp}, persoane: {persoane}")
+        print(f"🔍 DEBUG: Starting confirmation process for token: {token}, resp: {resp}, persoane: {persoane}", file=sys.stderr)
+        print("⚡ DEBUG: About to call get_sheet()...", file=sys.stderr)
         sheet = get_sheet()
-        print(f"✅ DEBUG: Sheet loaded successfully")
+        print(f"✅ DEBUG: Sheet loaded successfully", file=sys.stderr)
+        print("⚡ DEBUG: About to call sheet.get_all_values()...", file=sys.stderr)
         all_data = sheet.get_all_values()
-        print(f"📊 DEBUG: Got {len(all_data)} rows from sheet")
+        print(f"📊 DEBUG: Got {len(all_data)} rows from sheet", file=sys.stderr)
         
         # Găsește rândul cu tokenul
         row_index = None
