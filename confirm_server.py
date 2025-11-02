@@ -18,12 +18,13 @@ import gspread
 
 app = Flask(__name__)
 
-# SMTP evenimente@unbr.ro - ÎNCERCĂM PORT 465 (SSL) în loc de 587 (TLS)
-# Render blochează port 587, dar 465 poate merge
-SMTP_SERVER = os.getenv('SMTP_SERVER', 'mail.unbr.ro')
-SMTP_PORT = int(os.getenv('SMTP_PORT', '465'))
-SMTP_USE_SSL = os.getenv('SMTP_USE_SSL', 'true').lower() == 'true'
-EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS', 'evenimente@unbr.ro')
+# SMTP GMAIL pentru CONFIRMĂRI pe Render (Render blochează SMTP custom)
+# NOTE: Invitațiile se trimit LOCAL de pe evenimente@unbr.ro
+# Doar confirmările folosesc Gmail pentru a evita blocajul Render
+SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+SMTP_USE_SSL = False  # Gmail folosește STARTTLS
+EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS', 'alexandradragomir2311@gmail.com')
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD', '')
 SPREADSHEET_ID = '1-oAA8uUeDehcU-ckAHydsx8KujbXCWpZ0mMJIqWFoMg'
 SHEET_NAME = 'INVITATII SI CONFIRMARI'
@@ -46,6 +47,22 @@ def update_sheet_background(token, response, persons=None):
                         sheet.update_cell(i, 8, f"✔ Da - {persons}")
                         sheet.update_cell(i, 9, persons)
                         print(f"✅ Sheet updated: Da - {persons} persoane")
+                        
+                        # ⭐ LOGIC NOUĂ: Dacă 2 persoane, adaugă linie nouă
+                        if persons == '2':
+                            print(f"👥 Confirmare 2 persoane - adaug linie nouă...")
+                            # Copiază date din row original
+                            nume = row[0] if len(row) > 0 else ''
+                            prenume = row[1] if len(row) > 1 else ''
+                            functie = row[2] if len(row) > 2 else ''
+                            institutie = row[3] if len(row) > 3 else ''
+                            email = row[4] if len(row) > 4 else ''
+                            
+                            # Adaugă row nou la sfârșit
+                            new_row = [nume, prenume, functie, institutie, email, '', '', 
+                                      'Confirmare 2/2', '1', token]
+                            sheet.append_row(new_row)
+                            print(f"✅ Linie nouă adăugată pentru persoana 2/2")
                     else:
                         sheet.update_cell(i, 8, '❌ Nu')
                         sheet.update_cell(i, 9, '-')
@@ -54,6 +71,8 @@ def update_sheet_background(token, response, persons=None):
             print(f"⚠️ Token not found in Sheet")
         except Exception as e:
             print(f"❌ Sheet error: {e}")
+            import traceback
+            traceback.print_exc()
     
     # Start în background thread
     thread = threading.Thread(target=update, daemon=True)
@@ -76,7 +95,7 @@ def get_email_from_sheet(token):
         return 'alexandradragomir23@yahoo.com'
 
 def send_email_background(to_email, subject, html_body):
-    """Trimite email în thread separat - PORT 465 SSL"""
+    """Trimite email în thread separat - Gmail SMTP pentru Render"""
     def send():
         try:
             msg = MIMEMultipart('alternative')
@@ -85,18 +104,12 @@ def send_email_background(to_email, subject, html_body):
             msg['Subject'] = subject
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
-            # Folosim SMTP_SSL pentru port 465
-            if SMTP_USE_SSL:
-                print(f"📧 Folosesc SMTP_SSL pe port {SMTP_PORT}")
-                with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-                    server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-                    server.send_message(msg)
-            else:
-                print(f"📧 Folosesc SMTP+STARTTLS pe port {SMTP_PORT}")
-                with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-                    server.starttls()
-                    server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-                    server.send_message(msg)
+            # Gmail folosește întotdeauna STARTTLS pe port 587
+            print(f"📧 Gmail SMTP pe port {SMTP_PORT}")
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+                server.starttls()
+                server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+                server.send_message(msg)
             print(f"✅ Email trimis: {to_email}")
         except Exception as e:
             print(f"❌ Email error: {e}")
