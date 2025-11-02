@@ -52,18 +52,34 @@ def update_sheet_background(token, response, persons=None):
                         print(f"🔍 Checking persons: '{persons}' (type: {type(persons).__name__})", flush=True)
                         if str(persons) == '2':
                             print(f"👥 Confirmare 2 persoane - adaug linie nouă...", flush=True)
-                            # Copiază date din row original
-                            nume = row[0] if len(row) > 0 else ''
-                            prenume = row[1] if len(row) > 1 else ''
-                            functie = row[2] if len(row) > 2 else ''
-                            institutie = row[3] if len(row) > 3 else ''
-                            email = row[4] if len(row) > 4 else ''
                             
-                            # Adaugă row nou la sfârșit
-                            new_row = [nume, prenume, functie, institutie, email, '', '', 
-                                      'Confirmare 2/2', '1', token]
-                            sheet.append_row(new_row)
-                            print(f"✅ Linie nouă adăugată pentru persoana 2/2", flush=True)
+                            # Actualizează row-ul curent ca "Persoana 1/2"
+                            sheet.update_cell(i, 8, "✔ Da - Persoana 1/2")
+                            print(f"✅ Row {i} actualizat: Persoana 1/2", flush=True)
+                            
+                            # Verifică dacă următorul row există deja (Persoana 2/2)
+                            has_person2 = False
+                            if i < len(all_data):
+                                next_row = all_data[i] if i < len(all_data) else None
+                                if next_row and len(next_row) > 7 and "Persoana 2/2" in str(next_row[7]):
+                                    has_person2 = True
+                                    print(f"⚠️ Persoana 2/2 deja există în row {i+1}", flush=True)
+                            
+                            if not has_person2:
+                                # Inserează row NOU după cel curent
+                                sheet.insert_row([''] * 10, i + 1)
+                                print(f"✅ Row nou inserat la poziția {i+1}", flush=True)
+                                
+                                # Copiază datele din row-ul original (coloanele A-G)
+                                for col_idx in range(1, 8):  # Coloanele 1-7 (A-G)
+                                    val = sheet.cell(i, col_idx).value
+                                    sheet.update_cell(i + 1, col_idx, val)
+                                
+                                # Setează pentru Persoana 2/2 - ACELAȘI TOKEN!
+                                sheet.update_cell(i + 1, 8, "✔ Da - Persoana 2/2")
+                                sheet.update_cell(i + 1, 9, "Persoana 2")
+                                sheet.update_cell(i + 1, 10, token)  # Același token!
+                                print(f"✅ Linie nouă completată pentru Persoana 2/2", flush=True)
                     else:
                         sheet.update_cell(i, 8, '❌ Nu')
                         sheet.update_cell(i, 9, '-')
