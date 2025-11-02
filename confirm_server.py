@@ -15,6 +15,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sheets_utils import get_credentials
 import gspread
+from email_organization import save_sent_email_to_folder
+from smtp_utils import get_email_config
 
 app = Flask(__name__)
 
@@ -181,6 +183,16 @@ def send_notification_to_admin(guest_name, guest_email, persons, response_type):
                 print(f"📧 Logged in, sending admin notification...", flush=True)
                 server.send_message(msg)
             print(f"✅ Notificare trimisă către {EMAIL_ADDRESS}", flush=True)
+            
+            # Salvează în folderul "Confirmări Concert 2025"
+            try:
+                config = get_email_config()
+                if config:
+                    folder_type = "confirmare" if response_type == "confirmare" else "declinare"
+                    save_sent_email_to_folder(msg, config, folder_type)
+                    print(f"📁 Email salvat în folderul 'Confirmări Concert 2025'", flush=True)
+            except Exception as folder_error:
+                print(f"⚠️ Nu s-a putut salva în folder: {folder_error}", flush=True)
         except Exception as e:
             print(f"❌ Admin notification error: {e}", flush=True)
             import traceback
