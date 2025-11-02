@@ -18,13 +18,11 @@ import gspread
 
 app = Flask(__name__)
 
-# SMTP GMAIL pentru CONFIRMĂRI pe Render (Render blochează SMTP custom)
-# NOTE: Invitațiile se trimit LOCAL de pe evenimente@unbr.ro
-# Doar confirmările folosesc Gmail pentru a evita blocajul Render
-SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+# SMTP evenimente@unbr.ro - TREBUIE să meargă pe Render
+SMTP_SERVER = os.getenv('SMTP_SERVER', 'mail.unbr.ro')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
-SMTP_USE_SSL = False  # Gmail folosește STARTTLS
-EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS', 'alexandradragomir2311@gmail.com')
+SMTP_USE_TLS = os.getenv('SMTP_USE_TLS', 'true').lower() == 'true'
+EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS', 'evenimente@unbr.ro')
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD', '')
 SPREADSHEET_ID = '1-oAA8uUeDehcU-ckAHydsx8KujbXCWpZ0mMJIqWFoMg'
 SHEET_NAME = 'INVITATII SI CONFIRMARI'
@@ -95,7 +93,7 @@ def get_email_from_sheet(token):
         return 'alexandradragomir23@yahoo.com'
 
 def send_email_background(to_email, subject, html_body):
-    """Trimite email în thread separat - Gmail SMTP pentru Render"""
+    """Trimite email în thread separat - evenimente@unbr.ro SMTP"""
     def send():
         try:
             msg = MIMEMultipart('alternative')
@@ -104,10 +102,11 @@ def send_email_background(to_email, subject, html_body):
             msg['Subject'] = subject
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
-            # Gmail folosește întotdeauna STARTTLS pe port 587
-            print(f"📧 Gmail SMTP pe port {SMTP_PORT}")
+            # SMTP standard cu STARTTLS
+            print(f"📧 SMTP {SMTP_SERVER}:{SMTP_PORT}")
             with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-                server.starttls()
+                if SMTP_USE_TLS:
+                    server.starttls()
                 server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
                 server.send_message(msg)
             print(f"✅ Email trimis: {to_email}")
