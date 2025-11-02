@@ -1,6 +1,6 @@
 """
-CONFIRM SERVER - ASYNC EMAIL + GOOGLE SHEETS
-Trimite email în background, răspunde INSTANT, update Google Sheet
+CONFIRM SERVER - ASYNC EMAIL
+Trimite email în background, răspunde INSTANT
 """
 
 from flask import Flask, request, render_template_string
@@ -9,12 +9,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 import threading
-import sys
-
-# Import sheets_utils pentru Google Sheets
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from sheets_utils import get_credentials
-import gspread
 
 app = Flask(__name__)
 
@@ -22,55 +16,6 @@ SMTP_SERVER = os.getenv('SMTP_SERVER', 'mail.unbr.ro')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
 EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS', 'evenimente@unbr.ro')
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD', '')
-SPREADSHEET_ID = '1-oAA8uUeDehcU-ckAHydsx8KujbXCWpZ0mMJIqWFoMg'
-SHEET_NAME = 'INVITATII SI CONFIRMARI'
-
-def update_sheet_background(token, response, persons=None):
-    """Update Google Sheet în background"""
-    def update():
-        try:
-            print(f"📊 Update Sheet: token={token[:15]}... resp={response} pers={persons}")
-            creds = get_credentials()
-            client = gspread.authorize(creds)
-            spreadsheet = client.open_by_key(SPREADSHEET_ID)
-            sheet = spreadsheet.worksheet(SHEET_NAME)
-            all_data = sheet.get_all_values()
-            
-            # Găsește row după token
-            for i, row in enumerate(all_data[1:], start=2):
-                if len(row) > 9 and row[9] == token:
-                    if response == 'da':
-                        sheet.update_cell(i, 8, f"✔ Da - {persons}")
-                        sheet.update_cell(i, 9, persons)
-                        print(f"✅ Sheet updated: Da - {persons} persoane")
-                    else:
-                        sheet.update_cell(i, 8, '❌ Nu')
-                        sheet.update_cell(i, 9, '-')
-                        print(f"✅ Sheet updated: Nu particip")
-                    return
-            print(f"⚠️ Token not found in Sheet")
-        except Exception as e:
-            print(f"❌ Sheet error: {e}")
-    
-    # Start în background thread
-    thread = threading.Thread(target=update, daemon=True)
-    thread.start()
-
-def get_email_from_sheet(token):
-    """Găsește emailul din Sheet după token"""
-    try:
-        creds = get_credentials()
-        client = gspread.authorize(creds)
-        spreadsheet = client.open_by_key(SPREADSHEET_ID)
-        sheet = spreadsheet.worksheet(SHEET_NAME)
-        all_data = sheet.get_all_values()
-        
-        for row in all_data[1:]:
-            if len(row) > 9 and row[9] == token:
-                return row[4] if len(row) > 4 else 'alexandradragomir23@yahoo.com'
-        return 'alexandradragomir23@yahoo.com'
-    except:
-        return 'alexandradragomir23@yahoo.com'
 
 def send_email_background(to_email, subject, html_body):
     """Trimite email în thread separat"""
@@ -136,17 +81,11 @@ a:hover { opacity: 0.9; }
         """, token=token)
     
     if resp == 'da':
-        # UPDATE GOOGLE SHEET ÎN BACKGROUND
-        update_sheet_background(token, 'da', persoane)
-        
-        # GĂSEȘTE EMAIL DIN SHEET
-        guest_email = get_email_from_sheet(token)
-        
-        # TRIMITE EMAIL ÎN BACKGROUND
+        # TRIMITE EMAIL ÎN BACKGROUND - NU BLOCA
         send_email_background(
-            guest_email,
+            'alexandradragomir23@yahoo.com',
             '✅ Confirmare - Concert UNBR',
-            f'<h2>Confirmat pentru {persoane} {'persoană' if persoane == '1' else 'persoane'}</h2><p>Vă mulțumim! Veți primi biletul în curând.</p>'
+            f'<h2>Confirmat pentru {persoane} persoane</h2><p>Vă mulțumim!</p>'
         )
         
         # RĂSPUNDE IMEDIAT
@@ -170,15 +109,9 @@ p { color: #666; }
         """, persoane=persoane)
     
     else:
-        # UPDATE GOOGLE SHEET ÎN BACKGROUND
-        update_sheet_background(token, 'nu', None)
-        
-        # GĂSEȘTE EMAIL DIN SHEET
-        guest_email = get_email_from_sheet(token)
-        
         # TRIMITE EMAIL ÎN BACKGROUND
         send_email_background(
-            guest_email,
+            'alexandradragomir23@yahoo.com',
             'Răspuns - Concert UNBR',
             '<h2>Răspuns înregistrat</h2><p>Ne pare rău că nu puteți participa.</p>'
         )

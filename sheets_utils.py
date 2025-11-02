@@ -407,7 +407,7 @@ def get_guest_list() -> List[Dict[str, str]]:
                     }
                     
                     # Add confirmation URLs with token
-                    confirm_url = f"{WEBAPP_URL}?token={token}&resp=da"
+                    confirm_url = f"{WEBAPP_URL}?token={token}"
                     decline_url = f"{WEBAPP_URL}?token={token}&resp=nu"
                     guest['confirm_url'] = confirm_url
                     guest['decline_url'] = decline_url
