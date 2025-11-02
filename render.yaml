@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: automatizare-invitatii
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python confirm_server.py
+    envVars:
+      - key: SMTP_SERVER
+        value: mail.unbr.ro
+      - key: SMTP_PORT
+        value: 587
+      - key: EMAIL_ADDRESS
+        value: evenimente@unbr.ro
+      - key: EMAIL_PASSWORD
+        sync: false
+      - key: SMTP_USE_TLS
+        value: true
