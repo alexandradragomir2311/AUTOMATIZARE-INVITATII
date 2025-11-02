@@ -1,6 +1,7 @@
 """
 Server Flask pentru confirmări - intermediar între utilizatori și Google Sheets
 Rulează acest server și utilizatorii vor accesa linkuri locale (fără Google Apps Script)
+VERSION: 2.0 - With extensive debugging
 """
 
 from flask import Flask, request, render_template_string
