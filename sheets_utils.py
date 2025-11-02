@@ -42,6 +42,8 @@ WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://automatizare-invitatii.onrender.co
 
 def get_credentials():
     """Get and refresh OAuth 2.0 credentials"""
+    import base64
+    
     creds = None
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
@@ -52,10 +54,10 @@ def get_credentials():
     # Prioritate 1: GOOGLE_TOKEN (suficient pentru Render)
     if env_token:
         # Running on Render - use token from environment
-        import base64
         token_path = '/tmp/token.pickle'
         
         try:
+            logger.info("🔍 Attempting to load GOOGLE_TOKEN from environment...")
             token_bytes = base64.b64decode(env_token)
             with open(token_path, 'wb') as f:
                 f.write(token_bytes)
@@ -63,13 +65,24 @@ def get_credentials():
             with open(token_path, 'rb') as token:
                 creds = pickle.load(token)
             
+            # Verifică și reîmprospătează dacă e expirat
+            if creds and creds.expired and creds.refresh_token:
+                logger.info("🔄 Token expired, refreshing...")
+                creds.refresh(Request())
+                # Salvează token-ul reîmprospătat
+                with open(token_path, 'wb') as token:
+                    pickle.dump(creds, token)
+            
             logger.info("✅ Loaded credentials from GOOGLE_TOKEN environment variable")
             return creds
         except Exception as e:
-            logger.error(f"Error loading GOOGLE_TOKEN: {e}")
+            logger.error(f"❌ Error loading GOOGLE_TOKEN: {e}")
+            # NU continua, aruncă eroarea pentru debugging
+            raise Exception(f"Failed to load GOOGLE_TOKEN: {e}")
     
     # Prioritate 2: GOOGLE_CREDENTIALS (pentru compatibilitate)
     if env_creds:
+        logger.info("🔍 Using GOOGLE_CREDENTIALS...")
         creds_data = json.loads(env_creds)
         creds_path = '/tmp/credentials.json'
         token_path = '/tmp/token.pickle'
@@ -78,12 +91,12 @@ def get_credentials():
             json.dump(creds_data, f)
         
         if env_token:
-            import base64
             token_bytes = base64.b64decode(env_token)
             with open(token_path, 'wb') as f:
                 f.write(token_bytes)
     else:
         # Prioritate 3: Running locally
+        logger.info("🔍 Running locally, using file credentials...")
         creds_path = os.path.join(current_dir, 'credentials', 'credentials.json')
         token_path = os.path.join(current_dir, 'credentials', 'token.pickle')
 
@@ -93,6 +106,7 @@ def get_credentials():
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
+            logger.info("🔄 Refreshing expired credentials...")
             creds.refresh(Request())
         else:
             if not os.path.exists(creds_path):
