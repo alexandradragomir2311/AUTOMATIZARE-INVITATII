@@ -18,10 +18,10 @@ import gspread
 
 app = Flask(__name__)
 
-# SMTP evenimente@unbr.ro - TREBUIE să meargă pe Render
+# SMTP evenimente@unbr.ro - PORT 25 (standard SMTP, fără TLS)
 SMTP_SERVER = os.getenv('SMTP_SERVER', 'mail.unbr.ro')
-SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
-SMTP_USE_TLS = os.getenv('SMTP_USE_TLS', 'true').lower() == 'true'
+SMTP_PORT = int(os.getenv('SMTP_PORT', '25'))
+SMTP_USE_TLS = os.getenv('SMTP_USE_TLS', 'false').lower() == 'true'
 EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS', 'evenimente@unbr.ro')
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD', '')
 SPREADSHEET_ID = '1-oAA8uUeDehcU-ckAHydsx8KujbXCWpZ0mMJIqWFoMg'
