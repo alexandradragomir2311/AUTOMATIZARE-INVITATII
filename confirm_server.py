@@ -20,12 +20,10 @@ from smtp_utils import get_email_config
 
 app = Flask(__name__)
 
-# SMTP evenimente@unbr.ro - PORT 587 cu STARTTLS
-SMTP_SERVER = os.getenv('SMTP_SERVER', 'mail.unbr.ro')
-SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
-SMTP_USE_TLS = os.getenv('SMTP_USE_TLS', 'true').lower() == 'true'
-EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS', 'evenimente@unbr.ro')
-EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD', '')
+# GMAIL SMTP pentru Render (funcționează!) + Headers personalizate evenimente@unbr.ro
+GMAIL_ADDRESS = os.getenv('GMAIL_ADDRESS', '')  # Gmail-ul tău
+GMAIL_APP_PASSWORD = os.getenv('GMAIL_APP_PASSWORD', '')  # App Password Gmail
+DISPLAY_EMAIL = 'evenimente@unbr.ro'  # Ce apare în From/Reply-To
 SPREADSHEET_ID = '1-oAA8uUeDehcU-ckAHydsx8KujbXCWpZ0mMJIqWFoMg'
 SHEET_NAME = 'INVITATII SI CONFIRMARI'
 
@@ -135,10 +133,10 @@ def get_name_from_sheet(token):
         return 'Invitat'
 
 def send_notification_to_admin(guest_name, guest_email, persons, response_type):
-    """Trimite notificare către evenimente@unbr.ro când cineva confirmă"""
+    """Trimite notificare către evenimente@unbr.ro când cineva confirmă - GMAIL SMTP"""
     def send():
         try:
-            print(f"📧 Preparing admin notification...", flush=True)
+            print(f"📧 Preparing admin notification via Gmail...", flush=True)
             
             # Construiește mesajul
             if response_type == 'confirmare':
@@ -168,32 +166,22 @@ def send_notification_to_admin(guest_name, guest_email, persons, response_type):
                 """
             
             msg = MIMEMultipart('alternative')
-            msg['From'] = EMAIL_ADDRESS
-            msg['To'] = EMAIL_ADDRESS  # Trimite către tine însuți!
+            msg['From'] = f"UNBR Evenimente <{DISPLAY_EMAIL}>"  # Apare ca evenimente@unbr.ro
+            msg['Reply-To'] = DISPLAY_EMAIL  # Reply-urile merg la evenimente@unbr.ro
+            msg['To'] = DISPLAY_EMAIL  # Trimite către evenimente@unbr.ro
             msg['Subject'] = subject
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
-            # Trimite prin SMTP
-            print(f"📧 Connecting to SMTP {SMTP_SERVER}:{SMTP_PORT}...", flush=True)
-            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-                print(f"📧 Connected! Starting TLS={SMTP_USE_TLS}...", flush=True)
-                if SMTP_USE_TLS:
-                    server.starttls()
-                    print(f"📧 TLS started, logging in...", flush=True)
-                server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            # Trimite prin GMAIL SMTP (funcționează pe Render!)
+            print(f"📧 Connecting to Gmail SMTP...", flush=True)
+            with smtplib.SMTP('smtp.gmail.com', 587, timeout=30) as server:
+                print(f"📧 Connected! Starting TLS...", flush=True)
+                server.starttls()
+                print(f"📧 TLS started, logging in with Gmail...", flush=True)
+                server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
                 print(f"📧 Logged in, sending admin notification...", flush=True)
                 server.send_message(msg)
-            print(f"✅ Notificare trimisă către {EMAIL_ADDRESS}", flush=True)
-            
-            # Salvează în folderul "Confirmări Concert 2025"
-            try:
-                config = get_email_config()
-                if config:
-                    folder_type = "confirmare" if response_type == "confirmare" else "declinare"
-                    save_sent_email_to_folder(msg, config, folder_type)
-                    print(f"📁 Email salvat în folderul 'Confirmări Concert 2025'", flush=True)
-            except Exception as folder_error:
-                print(f"⚠️ Nu s-a putut salva în folder: {folder_error}", flush=True)
+            print(f"✅ Notificare trimisă către {DISPLAY_EMAIL} (via Gmail)", flush=True)
         except Exception as e:
             print(f"❌ Admin notification error: {e}", flush=True)
             import traceback
@@ -206,38 +194,64 @@ def send_notification_to_admin(guest_name, guest_email, persons, response_type):
     print(f"🔄 Admin notification thread started", flush=True)
     return thread  # Returnează thread-ul pentru tracking
 
-def send_email_background(to_email, subject, html_body):
-    """Trimite email în thread separat - evenimente@unbr.ro SMTP"""
+def send_confirmation_email_to_guest(to_email, guest_name, persons):
+    """Trimite email de CONFIRMARE către invitat - GMAIL SMTP cu headers evenimente@unbr.ro"""
     def send():
         try:
-            print(f"📧 Preparing email to {to_email}...", flush=True)
+            print(f"📧 Preparing confirmation email to {to_email}...", flush=True)
+            
+            subject = f"✅ Confirmare participare - Concert UNBR 24 noiembrie 2025"
+            html_body = f"""
+            <html><body style="font-family: Arial; padding: 20px; background: #f5f5f5;">
+            <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                <h1 style="color: #4CAF50; text-align: center;">✅ Confirmare Primită</h1>
+                <p style="font-size: 16px;">Bună ziua <strong>{guest_name}</strong>,</p>
+                <p style="font-size: 16px;">Am înregistrat confirmarea dumneavoastră pentru <strong>{persons} {'persoană' if persons == '1' else 'persoane'}</strong> la concertul din 24 noiembrie 2025.</p>
+                
+                <div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="margin-top: 0; color: #333;">📅 Detalii eveniment:</h3>
+                    <p style="margin: 5px 0;"><strong>Data:</strong> 24 noiembrie 2025</p>
+                    <p style="margin: 5px 0;"><strong>Organizator:</strong> UNBR</p>
+                    <p style="margin: 5px 0;"><strong>Persoane confirmate:</strong> {persons}</p>
+                </div>
+                
+                <p style="font-size: 14px; color: #666; margin-top: 30px;">Vă așteptăm cu drag!</p>
+                <p style="font-size: 14px; color: #666;">Cu stimă,<br><strong>Echipa UNBR</strong></p>
+                
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                <p style="font-size: 12px; color: #999; text-align: center;">Acest email a fost trimis automat. Pentru întrebări, răspundeți la acest email.</p>
+            </div>
+            </body></html>
+            """
+            
             msg = MIMEMultipart('alternative')
-            msg['From'] = EMAIL_ADDRESS
+            msg['From'] = f"UNBR Evenimente <{DISPLAY_EMAIL}>"  # Apare ca evenimente@unbr.ro
+            msg['Reply-To'] = DISPLAY_EMAIL  # Reply-urile merg la evenimente@unbr.ro
             msg['To'] = to_email
             msg['Subject'] = subject
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
-            # SMTP standard cu STARTTLS
-            print(f"📧 Connecting to SMTP {SMTP_SERVER}:{SMTP_PORT}...", flush=True)
-            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-                print(f"📧 Connected! Starting TLS={SMTP_USE_TLS}...", flush=True)
-                if SMTP_USE_TLS:
-                    server.starttls()
-                    print(f"📧 TLS started, logging in...", flush=True)
-                server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-                print(f"📧 Logged in, sending...", flush=True)
+            # Trimite prin GMAIL SMTP (funcționează pe Render!)
+            print(f"📧 Connecting to Gmail SMTP...", flush=True)
+            with smtplib.SMTP('smtp.gmail.com', 587, timeout=30) as server:
+                print(f"📧 Connected! Starting TLS...", flush=True)
+                server.starttls()
+                print(f"📧 TLS started, logging in with Gmail...", flush=True)
+                server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
+                print(f"📧 Logged in, sending confirmation to guest...", flush=True)
                 server.send_message(msg)
-            print(f"✅ Email trimis: {to_email}", flush=True)
+            print(f"✅ Email de confirmare trimis către {to_email} (via Gmail, from {DISPLAY_EMAIL})", flush=True)
         except Exception as e:
-            print(f"❌ Email error: {e}", flush=True)
+            print(f"❌ Confirmation email error: {e}", flush=True)
             import traceback
             traceback.print_exc()
     
     # Start în background thread
-    print(f"🔄 Launching email send thread...", flush=True)
+    print(f"🔄 Launching confirmation email thread...", flush=True)
     thread = threading.Thread(target=send, daemon=True)
     thread.start()
-    print(f"🔄 Email thread started", flush=True)
+    print(f"🔄 Confirmation email thread started", flush=True)
+    return thread
 
 @app.route('/')
 def home():
@@ -283,19 +297,23 @@ a:hover { opacity: 0.9; }
     if resp == 'da':
         print(f"🎯 CONFIRMARE DA - persoane={persoane}, token={token[:15]}...", flush=True)
         
-        # UPDATE GOOGLE SHEET ÎN BACKGROUND
-        print(f"📊 Starting Sheet update thread...", flush=True)
-        sheet_thread = update_sheet_background(token, 'da', persoane)
-        
         # GĂSEȘTE DATELE INVITATULUI DIN SHEET
         print(f"📧 Getting guest info from sheet...", flush=True)
         guest_email = get_email_from_sheet(token)
         guest_name = get_name_from_sheet(token)
         print(f"📧 Found: {guest_name} ({guest_email})", flush=True)
         
-        # TRIMITE NOTIFICARE CĂTRE evenimente@unbr.ro (DUBLĂ VERIFICARE)
-        print(f"📧 Sending notification to evenimente@unbr.ro...", flush=True)
-        email_thread = send_notification_to_admin(
+        # 1. UPDATE GOOGLE SHEET ÎN BACKGROUND
+        print(f"📊 Starting Sheet update thread...", flush=True)
+        sheet_thread = update_sheet_background(token, 'da', persoane)
+        
+        # 2. TRIMITE EMAIL DE CONFIRMARE CĂTRE INVITAT (via Gmail, afișat ca evenimente@unbr.ro)
+        print(f"📧 Sending confirmation email to guest...", flush=True)
+        guest_email_thread = send_confirmation_email_to_guest(guest_email, guest_name, persoane)
+        
+        # 3. TRIMITE NOTIFICARE CĂTRE evenimente@unbr.ro (DUBLĂ VERIFICARE)
+        print(f"📧 Sending notification to admin...", flush=True)
+        admin_email_thread = send_notification_to_admin(
             guest_name,
             guest_email,
             persoane,
@@ -323,9 +341,9 @@ p { color: #666; }
 <div class="emoji">✅</div>
 <h1>Confirmare primită!</h1>
 <p>Am înregistrat participarea pentru {{ persoane }} persoane.</p>
-<p style="margin-top: 20px; font-size: 14px; color: #999;">Email de confirmare vine în curând...</p>
+<p style="margin-top: 20px; font-size: 14px; color: #999;">Veți primi un email de confirmare în curând la {{ email }}.</p>
 </div></body></html>
-        """, persoane=persoane)
+        """, persoane=persoane, email=guest_email)
     
     else:
         # UPDATE GOOGLE SHEET ÎN BACKGROUND
