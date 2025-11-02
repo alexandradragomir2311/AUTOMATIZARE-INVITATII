@@ -229,8 +229,11 @@ def confirm():
             color='#ff9800')
     
     try:
+        print(f"🔍 DEBUG: Starting confirmation process for token: {token}, resp: {resp}, persoane: {persoane}")
         sheet = get_sheet()
+        print(f"✅ DEBUG: Sheet loaded successfully")
         all_data = sheet.get_all_values()
+        print(f"📊 DEBUG: Got {len(all_data)} rows from sheet")
         
         # Găsește rândul cu tokenul
         row_index = None
@@ -238,6 +241,7 @@ def confirm():
         nume = None
         gen = None
         
+        print(f"🔍 DEBUG: Searching for token in {len(all_data)-1} data rows...")
         for i, row in enumerate(all_data[1:], start=2):  # Skip header
             if len(row) > 9 and row[9] == token:  # Coloana J = index 9
                 row_index = i
