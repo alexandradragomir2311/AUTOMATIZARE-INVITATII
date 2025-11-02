@@ -1,208 +1,76 @@
 """
-Server Flask pentru confirmări - intermediar între utilizatori și Google Sheets
-Rulează acest server și utilizatorii vor accesa linkuri locale (fără Google Apps Script)
-VERSION: 2.0 - With extensive debugging
+SERVER SIMPLU PENTRU CONFIRMĂRI - VERSIUNE MINIMALISTĂ
 """
-
 from flask import Flask, request, render_template_string
 import gspread
 from datetime import datetime
-import uuid
 from sheets_utils import SPREADSHEET_ID, get_credentials
-from confirmation_system import send_confirmation_response
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr
 import os
 
-SHEET_NAME = 'INVITATII SI CONFIRMARI'
-
 app = Flask(__name__)
-
-# Configurare Google Sheets - FOLOSEȘTE ACELEAȘI CREDENȚIALE CA test_send.py
-def get_sheet():
-    """Get Google Sheet using OAuth2 credentials (same as test_send.py)"""
-    creds = get_credentials()
-    client = gspread.authorize(creds)
-    spreadsheet = client.open_by_key(SPREADSHEET_ID)
-    return spreadsheet.worksheet(SHEET_NAME)
-
+SHEET_NAME = 'INVITATII SI CONFIRMARI'
 DEADLINE = datetime(2025, 11, 10, 23, 59, 59)
 
-# Template HTML pentru selecție persoane
-SELECTION_PAGE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Confirmați participarea</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 500px;
-            width: 100%;
-            padding: 40px;
-            text-align: center;
-        }
-        .logo {
-            width: 100px;
-            height: 100px;
-            margin: 0 auto 20px;
-            background: #667eea;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 48px;
-        }
-        h1 { color: #333; margin-bottom: 10px; font-size: 28px; }
-        .subtitle { color: #666; margin-bottom: 20px; font-size: 16px; line-height: 1.5; }
-        .deadline {
-            background: #e3f2fd;
-            color: #1976d2;
-            padding: 10px 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            font-weight: 600;
-        }
-        .question {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            font-size: 18px;
-            color: #333;
-            font-weight: 500;
-        }
-        .buttons { display: flex; gap: 15px; margin-top: 20px; }
-        .btn {
-            flex: 1;
-            padding: 15px 30px;
-            border: none;
-            border-radius: 10px;
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-            color: white;
-        }
-        .btn-1 { background: #4CAF50; }
-        .btn-1:hover { background: #45a049; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4); }
-        .btn-2 { background: #2196F3; }
-        .btn-2:hover { background: #0b7dda; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(33, 150, 243, 0.4); }
-        .btn-no { background: #f44336; }
-        .btn-no:hover { background: #da190b; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(244, 67, 54, 0.4); }
-        @media (max-width: 480px) {
-            .container { padding: 30px 20px; }
-            h1 { font-size: 24px; }
-            .buttons { flex-direction: column; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="logo">🎵</div>
-        <h1>Confirmați participarea</h1>
-        <p class="subtitle">Concert omagial UNBR<br>24 noiembrie 2025, ora 19:30<br>Ateneul Român</p>
-        <div class="deadline">⏰ Termen limită: 10 noiembrie 2025</div>
-        <div class="question">Pentru câte persoane doriți să rezervăm locuri?</div>
-        <div class="buttons">
-            <a href="/confirm?token={{ token }}&resp=da&persoane=1" class="btn btn-1">1 persoană</a>
-            <a href="/confirm?token={{ token }}&resp=da&persoane=2" class="btn btn-2">2 persoane</a>
-        </div>
-        <div class="buttons" style="margin-top: 15px;">
-            <a href="/confirm?token={{ token }}&resp=nu" class="btn btn-no">Nu particip</a>
-        </div>
-        <p style="margin-top: 30px; font-size: 14px; color: #666; font-style: italic;">
-            💡 Puteți răspunde și modifica alegerea până la data de 10 noiembrie 2025
-        </p>
-    </div>
-</body>
-</html>
-"""
+# Email config - DIRECT!
+SMTP_SERVER = os.getenv('SMTP_SERVER', 'mail.unbr.ro')
+SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS', 'evenimente@unbr.ro')
+EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD', '')
 
-# Template HTML pentru confirmare
-SUCCESS_PAGE = """
+# Dacă nu e pe Render, citește din fișier
+if not EMAIL_PASSWORD:
+    try:
+        with open('credentials/email_credentials.txt', 'r') as f:
+            EMAIL_PASSWORD = f.read().strip()
+    except:
+        pass
+
+def send_email_direct(to_email: str, subject: str, html_body: str):
+    """Trimite email DIRECT prin SMTP - fără complicații!"""
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['From'] = formataddr(('Evenimente UNBR', EMAIL_ADDRESS))
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+        
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.send_message(msg)
+        
+        print(f"✅ Email trimis către {to_email}")
+        return True
+    except Exception as e:
+        print(f"❌ Eroare email: {e}")
+        return False
+
+# Template simplu pentru confirmare
+SUCCESS_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title }}</title>
+    <title>Confirmare înregistrată</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 600px;
-            width: 100%;
-            padding: 50px;
-            text-align: center;
-        }
-        .icon {
-            font-size: 80px;
-            margin-bottom: 20px;
-            animation: bounce 1s ease;
-        }
-        @keyframes bounce {
-            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-            40% { transform: translateY(-20px); }
-            60% { transform: translateY(-10px); }
-        }
-        h1 { color: {{ color }}; margin-bottom: 30px; font-size: 32px; }
-        .message { color: #333; text-align: left; line-height: 1.8; }
-        .footer {
-            margin-top: 40px;
-            padding-top: 30px;
-            border-top: 2px solid #f0f0f0;
-            color: #666;
-            font-size: 14px;
-        }
-        .contact { margin-top: 15px; font-size: 14px; color: #666; }
-        strong { color: {{ color }}; }
-        @media (max-width: 480px) {
-            .container { padding: 30px 20px; }
-            h1 { font-size: 24px; }
-            .icon { font-size: 60px; }
-        }
+        body { font-family: Arial; text-align: center; padding: 50px; background: #f5f5f5; }
+        .box { background: white; padding: 40px; border-radius: 10px; max-width: 500px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #4CAF50; }
+        p { color: #666; line-height: 1.6; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="icon">{{ icon }}</div>
-        <h1>{{ title }}</h1>
-        <div class="message">{{ message | safe }}</div>
-        <div class="footer">
-            <strong>Uniunea Națională a Barourilor din România</strong>
-            <div class="contact">
-                📧 Contact: Alexandra-Nicoleta DRAGOMIR<br>
-                📞 Tel: +40 21 313 4875 | Mobil: +40 740 318 791<br>
-                📍 București, Palatul de Justiție, Splaiul Independenței nr. 5
-            </div>
-        </div>
+    <div class="box">
+        <h1>✅ {{ title }}</h1>
+        <p>{{ message }}</p>
+        <p style="margin-top: 30px; font-size: 14px; color: #999;">
+            Veți primi în curând un email de confirmare.
+        </p>
     </div>
 </body>
 </html>
@@ -210,237 +78,149 @@ SUCCESS_PAGE = """
 
 @app.route('/confirm', methods=['GET'])
 def confirm():
-    import sys
-    print("=" * 80, file=sys.stderr)
-    print("🚀🚀🚀 CONFIRM ROUTE CALLED - VERSION 3.0!", file=sys.stderr)
-    print("=" * 80, file=sys.stderr)
+    """Handler SIMPLU pentru confirmări"""
     token = request.args.get('token')
     resp = request.args.get('resp')
     persoane = request.args.get('persoane')
-    print(f"📥 Received: token={token}, resp={resp}, persoane={persoane}", file=sys.stderr)
+    
+    print(f"\n{'='*80}")
+    print(f"🎯 CONFIRMARE PRIMITĂ: token={token}, resp={resp}, persoane={persoane}")
+    print(f"{'='*80}\n")
     
     if not token:
-        return render_template_string(SUCCESS_PAGE, 
-            title='Eroare', 
-            icon='⚠️', 
-            message='Token lipsă. Vă rugăm să folosiți linkul din email.',
-            color='#f44336')
+        return "Token lipsă!", 400
     
     # Verifică deadline
-    print(f"⏰ DEBUG: Checking deadline... Current time: {datetime.now()}, Deadline: {DEADLINE}")
     if datetime.now() > DEADLINE:
-        print("❌ DEBUG: Deadline expired!")
-        return render_template_string(SUCCESS_PAGE,
-            title='Termen expirat',
-            icon='⏰',
-            message='Termenul limită pentru confirmări a expirat (10 noiembrie 2025). Pentru modificări, vă rugăm să contactați organizatorii.',
-            color='#ff9800')
+        return render_template_string(SUCCESS_TEMPLATE, 
+            title="Termen expirat",
+            message="Termenul limită pentru confirmări a expirat.")
     
-    print("✅ DEBUG: Deadline OK, proceeding...", file=sys.stderr)
     try:
-        print(f"🔍 DEBUG: Starting confirmation process for token: {token}, resp: {resp}, persoane: {persoane}", file=sys.stderr)
-        print("⚡ DEBUG: About to call get_sheet()...", file=sys.stderr)
-        sheet = get_sheet()
-        print(f"✅ DEBUG: Sheet loaded successfully", file=sys.stderr)
-        print("⚡ DEBUG: About to call sheet.get_all_values()...", file=sys.stderr)
+        # Conectează la Google Sheets
+        print("📊 Conectare la Google Sheets...")
+        creds = get_credentials()
+        client = gspread.authorize(creds)
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        sheet = spreadsheet.worksheet(SHEET_NAME)
+        print("✅ Conectat la Sheet!")
+        
+        # Citește datele
         all_data = sheet.get_all_values()
-        print(f"📊 DEBUG: Got {len(all_data)} rows from sheet", file=sys.stderr)
+        print(f"📋 Am citit {len(all_data)} rânduri")
         
-        # Găsește rândul cu tokenul
+        # Găsește invitatul după token
         row_index = None
-        email = None
-        nume = None
-        gen = None
+        guest_name = None
+        guest_email = None
         
-        print(f"🔍 DEBUG: Searching for token in {len(all_data)-1} data rows...")
-        for i, row in enumerate(all_data[1:], start=2):  # Skip header
-            if len(row) > 9 and row[9] == token:  # Coloana J = index 9
+        for i, row in enumerate(all_data[1:], start=2):
+            if len(row) > 9 and row[9] == token:
                 row_index = i
-                nume = row[0]  # Coloana A
-                gen = row[3]   # Coloana D (Gen) - index 3 nu 1!
-                email = row[4]  # Coloana E
-                print(f"🔍 Found guest: {nume}, email: {email}, resp: {resp}, persoane: {persoane}")
+                guest_name = row[0]
+                guest_email = row[4]
+                print(f"👤 Găsit: {guest_name} ({guest_email})")
                 break
         
         if not row_index:
-            return render_template_string(SUCCESS_PAGE,
-                title='Eroare',
-                icon='⚠️',
-                message='Token invalid sau expirat. Vă rugăm să folosiți linkul din email.',
-                color='#f44336')
+            return "Token invalid!", 404
         
-        # Dacă nu are resp, arată pagina de selecție
+        # Dacă nu are răspuns, arată pagina de selecție
         if not resp:
-            return render_template_string(SELECTION_PAGE, token=token)
+            return render_template_string("""
+            <!DOCTYPE html>
+            <html><head><meta charset="UTF-8"><title>Confirmați</title>
+            <style>
+                body { font-family: Arial; text-align: center; padding: 50px; }
+                .btn { padding: 20px 40px; margin: 10px; font-size: 18px; border: none; 
+                       border-radius: 8px; cursor: pointer; text-decoration: none; 
+                       display: inline-block; color: white; }
+                .btn-yes { background: #4CAF50; }
+                .btn-no { background: #f44336; }
+            </style></head><body>
+                <h1>Confirmați participarea</h1>
+                <p>Concert UNBR - 24 noiembrie 2025</p>
+                <a href="/confirm?token={{ token }}&resp=da&persoane=1" class="btn btn-yes">1 persoană</a>
+                <a href="/confirm?token={{ token }}&resp=da&persoane=2" class="btn btn-yes">2 persoane</a>
+                <br><br>
+                <a href="/confirm?token={{ token }}&resp=nu" class="btn btn-no">Nu particip</a>
+            </body></html>
+            """, token=token)
         
         # Procesează răspunsul
         if resp == 'da':
-            if not persoane or persoane not in ['1', '2']:
-                return render_template_string(SELECTION_PAGE, token=token)
-            
             nr_pers = f"{persoane} {'persoană' if persoane == '1' else 'persoane'}"
-            confirm_value = f"✔ Da - {nr_pers}"
+            sheet.update_cell(row_index, 8, f"✔ Da - {nr_pers}")
+            sheet.update_cell(row_index, 9, nr_pers)
+            print(f"✅ Sheet actualizat: Da - {nr_pers}")
             
-            # Verifică dacă există rând duplicat (Persoana 2/2) și șterge-l dacă acum confirmăm doar 1 persoană
-            if persoane == '1':
-                # row_index este poziția în Sheet (1-based), all_data include header la index 0
-                next_row_data_index = row_index  # În all_data, row_index corespunde următorului rând
-                if next_row_data_index < len(all_data):
-                    next_row = all_data[next_row_data_index]
-                    if len(next_row) > 7 and "Persoana 2/2" in str(next_row[7]):
-                        # Șterge rândul duplicat
-                        sheet.delete_rows(row_index + 1)
-            
-            # Actualizează sheet
-            sheet.update_cell(row_index, 8, confirm_value)  # Coloana H
-            sheet.update_cell(row_index, 9, nr_pers)  # Coloana I
-            
-            # Background verde
-            sheet.format(f"H{row_index}", {"backgroundColor": {"red": 0.85, "green": 0.92, "blue": 0.83}})
-            
-            # Dacă 2 persoane, verifică dacă există deja rând duplicat sau adaugă unul nou
-            if persoane == '2':
-                sheet.update_cell(row_index, 8, "✔ Da - Persoana 1/2")
-                
-                # Verifică dacă există deja rând pentru Persoana 2
-                has_person2 = False
-                if row_index < len(all_data):
-                    next_row = all_data[row_index] if row_index < len(all_data) else None
-                    if next_row and len(next_row) > 7 and "Persoana 2/2" in str(next_row[7]):
-                        has_person2 = True
-                
-                if not has_person2:
-                    # Inserează rând nou
-                    sheet.insert_row([''] * 10, row_index + 1)
-                    
-                    # Copiază datele
-                    for col_idx in range(1, 8):  # A-G
-                        val = sheet.cell(row_index, col_idx).value
-                        sheet.update_cell(row_index + 1, col_idx, val)
-                    
-                    # Setează pentru persoana 2 - FOLOSEȘTE ACELAȘI TOKEN!
-                    sheet.update_cell(row_index + 1, 8, "✔ Da - Persoana 2/2")
-                    sheet.update_cell(row_index + 1, 9, "Persoana 2")
-                    sheet.update_cell(row_index + 1, 10, token)  # Același token ca rândul 1
-                    sheet.format(f"H{row_index + 1}", {"backgroundColor": {"red": 0.85, "green": 0.92, "blue": 0.83}})
-            
-            # Trimite email confirmare prin SMTP UNBR - SIMPLU CA PE GMAIL!
-            try:
-                import smtplib
-                from email_organization import create_confirmation_response_email
-                from email_config import EmailConfig
-                
-                config = EmailConfig.load_from_file()
-                msg = create_confirmation_response_email(nume, "confirmare", email)
-                
-                with smtplib.SMTP(config.smtp_server, config.smtp_port) as server:
-                    server.starttls()
-                    server.login(config.email_address, config.email_password)
-                    server.send_message(msg)
-                
-                print(f"✅ Email confirmare trimis către {email}", file=sys.stderr)
-            except Exception as email_error:
-                print(f"❌ EROARE email: {email_error}", file=sys.stderr)
-                import traceback
-                traceback.print_exc()
-            
-            # Determină titlul pentru mesaj
-            if gen:
-                gen_lower = gen.lower()
-                titlu = 'Doamnă' if 'doamna' in gen_lower or gen_lower == 'f' else 'Domn'
-            else:
-                titlu = 'Domn'
-            
-            message = f"""
-            <p style="font-size: 18px; margin-bottom: 20px;">Vă mulțumim pentru confirmare, {titlu} {nume}!</p>
-            <p style="font-size: 16px; line-height: 1.6; margin-bottom: 15px;">
-                Am înregistrat participarea dumneavoastră pentru <strong>{nr_pers}</strong> la concertul omagial UNBR.
-            </p>
-            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
-                <p style="font-size: 16px; margin-bottom: 10px;"><strong>📅 Data:</strong> 24 noiembrie 2025</p>
-                <p style="font-size: 16px; margin-bottom: 10px;"><strong>🕐 Ora:</strong> 19:30</p>
-                <p style="font-size: 16px;"><strong>📍 Locație:</strong> Ateneul Român, București</p>
-            </div>
-            <p style="font-size: 16px; line-height: 1.6; color: #666;">
-                Veți primi în curând biletul de intrare pe email.
-            </p>
+            # TRIMITE EMAIL CONFIRMARE - DIRECT!
+            print(f"📧 Trimit email confirmare către {guest_email}...")
+            subject = "Confirmare participare - Concert UNBR"
+            html_body = f"""
+            <html><body style="font-family: Arial; padding: 20px;">
+                <h2 style="color: #4CAF50;">Vă mulțumim pentru confirmare!</h2>
+                <p>Bună ziua {guest_name},</p>
+                <p>Am înregistrat participarea dumneavoastră pentru <strong>{nr_pers}</strong> 
+                la concertul omagial UNBR.</p>
+                <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <p><strong>📅 Data:</strong> 24 noiembrie 2025</p>
+                    <p><strong>🕐 Ora:</strong> 19:30</p>
+                    <p><strong>📍 Locație:</strong> Ateneul Român, București</p>
+                </div>
+                <p>Veți primi în curând biletul de intrare.</p>
+                <p style="margin-top: 30px; color: #666; font-size: 14px;">
+                    Cu stimă,<br>
+                    Echipa UNBR
+                </p>
+            </body></html>
             """
             
-            return render_template_string(SUCCESS_PAGE,
-                title='Participare confirmată!',
-                icon='✅',
-                message=message,
-                color='#4CAF50')
-        
-        elif resp == 'nu':
-            # Șterge rândul duplicat dacă există (Persoana 2/2)
-            # row_index este poziția în Sheet (1-based), all_data include header la index 0
-            if row_index < len(all_data):
-                # Verifică dacă rândul următor există și este Persoana 2/2
-                next_row_data_index = row_index  # În all_data, row_index corespunde următorului rând
-                if next_row_data_index < len(all_data):
-                    next_row = all_data[next_row_data_index]
-                    if len(next_row) > 7 and "Persoana 2/2" in str(next_row[7]):
-                        # Șterge rândul duplicat
-                        sheet.delete_rows(row_index + 1)
+            if send_email_direct(guest_email, subject, html_body):
+                print("✅ EMAIL TRIMIS CU SUCCES!")
+            else:
+                print("⚠️ Email nu s-a trimis!")
             
+            return render_template_string(SUCCESS_TEMPLATE,
+                title="Participare confirmată!",
+                message=f"Am înregistrat participarea pentru {nr_pers}. Veți primi un email de confirmare în curând.")
+        
+        else:  # resp == 'nu'
             sheet.update_cell(row_index, 8, '❌ Nu')
             sheet.update_cell(row_index, 9, '-')
-            sheet.format(f"H{row_index}", {"backgroundColor": {"red": 0.96, "green": 0.80, "blue": 0.80}})
+            print(f"✅ Sheet actualizat: Nu particip")
             
-            # Trimite email declinare prin SMTP UNBR - SIMPLU CA PE GMAIL!
-            try:
-                import smtplib
-                from email_organization import create_confirmation_response_email
-                from email_config import EmailConfig
-                
-                config = EmailConfig.load_from_file()
-                msg = create_confirmation_response_email(nume, "declinare", email)
-                
-                with smtplib.SMTP(config.smtp_server, config.smtp_port) as server:
-                    server.starttls()
-                    server.login(config.email_address, config.email_password)
-                    server.send_message(msg)
-                
-                print(f"✅ Email declinare trimis către {email}", file=sys.stderr)
-            except Exception as email_error:
-                print(f"❌ EROARE email: {email_error}", file=sys.stderr)
-                import traceback
-                traceback.print_exc()
-            
-            # Determină titlul pentru mesaj
-            if gen:
-                gen_lower = gen.lower()
-                titlu = 'Doamnă' if 'doamna' in gen_lower or gen_lower == 'f' else 'Domn'
-            else:
-                titlu = 'Domn'
-            
-            message = f"""
-            <p style="font-size: 18px; margin-bottom: 20px;">Vă mulțumim pentru răspuns, {titlu} {nume}!</p>
-            <p style="font-size: 16px; line-height: 1.6; color: #666;">
-                Ne pare rău că nu puteți participa la acest eveniment. Am înregistrat răspunsul dumneavoastră.
-            </p>
-            <p style="font-size: 16px; line-height: 1.6; color: #666; margin-top: 15px;">
-                Sperăm să vă revedem la următoarele evenimente UNBR!
-            </p>
+            # TRIMITE EMAIL DECLINARE - DIRECT!
+            print(f"📧 Trimit email declinare către {guest_email}...")
+            subject = "Răspuns înregistrat - Concert UNBR"
+            html_body = f"""
+            <html><body style="font-family: Arial; padding: 20px;">
+                <h2>Răspuns înregistrat</h2>
+                <p>Bună ziua {guest_name},</p>
+                <p>Ne pare rău că nu puteți participa la acest eveniment. 
+                Am înregistrat răspunsul dumneavoastră.</p>
+                <p>Sperăm să vă revedem la următoarele evenimente UNBR!</p>
+                <p style="margin-top: 30px; color: #666; font-size: 14px;">
+                    Cu stimă,<br>
+                    Echipa UNBR
+                </p>
+            </body></html>
             """
             
-            return render_template_string(SUCCESS_PAGE,
-                title='Răspuns înregistrat',
-                icon='📝',
-                message=message,
-                color='#2196F3')
-        
+            send_email_direct(guest_email, subject, html_body)
+            
+            return render_template_string(SUCCESS_TEMPLATE,
+                title="Răspuns înregistrat",
+                message="Am înregistrat că nu puteți participa. Vă mulțumim pentru răspuns!")
+    
     except Exception as e:
-        print(f"ERROR: {e}")
-        return render_template_string(SUCCESS_PAGE,
-            title='Eroare',
-            icon='⚠️',
-            message=f'A apărut o eroare: {str(e)}',
-            color='#f44336')
+        print(f"❌ EROARE: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"Eroare: {str(e)}", 500
 
 if __name__ == '__main__':
-    print("\n🚀 SERVER PORNIT pe http://localhost:5000")
-    print("📧 Linkurile din email vor funcționa când serverul rulează!")
-    print("⚠️  IMPORTANT: Lasă serverul pornit pentru ca invitațiile să funcționeze!\n")
+    print("\n🚀 SERVER PORNIT - Versiune SIMPLIFICATĂ")
+    print(f"📧 Email: {EMAIL_ADDRESS}")
+    print(f"🔐 Parolă: {'✅ Setată' if EMAIL_PASSWORD else '❌ LIPSĂ!'}\n")
     app.run(debug=True, host='0.0.0.0', port=5000)
