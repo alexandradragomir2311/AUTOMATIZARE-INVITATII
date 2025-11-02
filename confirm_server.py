@@ -1,31 +1,41 @@
 """
 CONFIRM SERVER - ASYNC EMAIL + GOOGLE SHEETS
-Trimite email în background, răspunde INSTANT, update Google Sheet
+Trimite email în background prin Gmail API, răspunde INSTANT, update Google Sheet
 """
 
 from flask import Flask, request, render_template_string
-import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 import threading
 import sys
+import base64
 
 # Import sheets_utils pentru Google Sheets
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sheets_utils import get_credentials
 import gspread
-from email_organization import save_sent_email_to_folder
-from smtp_utils import get_email_config
+from googleapiclient.discovery import build
 
 app = Flask(__name__)
 
-# GMAIL SMTP pentru Render (funcționează!) + Headers personalizate evenimente@unbr.ro
-GMAIL_ADDRESS = os.getenv('GMAIL_ADDRESS', '')  # Gmail-ul tău
-GMAIL_APP_PASSWORD = os.getenv('GMAIL_APP_PASSWORD', '')  # App Password Gmail
+# Gmail API pentru Render (funcționează prin HTTPS!) + Headers personalizate evenimente@unbr.ro
 DISPLAY_EMAIL = 'evenimente@unbr.ro'  # Ce apare în From/Reply-To
 SPREADSHEET_ID = '1-oAA8uUeDehcU-ckAHydsx8KujbXCWpZ0mMJIqWFoMg'
 SHEET_NAME = 'INVITATII SI CONFIRMARI'
+
+def get_gmail_service():
+    """Creează serviciul Gmail API folosind același credential ca și Sheets"""
+    try:
+        creds = get_credentials()
+        service = build('gmail', 'v1', credentials=creds)
+        print(f"✅ Gmail API service created", flush=True)
+        return service
+    except Exception as e:
+        print(f"❌ Error creating Gmail service: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return None
 
 def update_sheet_background(token, response, persons=None):
     """Update Google Sheet în background"""
@@ -133,10 +143,10 @@ def get_name_from_sheet(token):
         return 'Invitat'
 
 def send_notification_to_admin(guest_name, guest_email, persons, response_type):
-    """Trimite notificare către evenimente@unbr.ro când cineva confirmă - GMAIL SMTP"""
+    """Trimite notificare către evenimente@unbr.ro când cineva confirmă - GMAIL API"""
     def send():
         try:
-            print(f"📧 Preparing admin notification via Gmail...", flush=True)
+            print(f"📧 Preparing admin notification via Gmail API...", flush=True)
             
             # Construiește mesajul
             if response_type == 'confirmare':
@@ -172,16 +182,20 @@ def send_notification_to_admin(guest_name, guest_email, persons, response_type):
             msg['Subject'] = subject
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
-            # Trimite prin GMAIL SMTP (funcționează pe Render!)
-            print(f"📧 Connecting to Gmail SMTP...", flush=True)
-            with smtplib.SMTP('smtp.gmail.com', 587, timeout=30) as server:
-                print(f"📧 Connected! Starting TLS...", flush=True)
-                server.starttls()
-                print(f"📧 TLS started, logging in with Gmail...", flush=True)
-                server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
-                print(f"📧 Logged in, sending admin notification...", flush=True)
-                server.send_message(msg)
-            print(f"✅ Notificare trimisă către {DISPLAY_EMAIL} (via Gmail)", flush=True)
+            # Trimite prin GMAIL API (funcționează pe Render!)
+            print(f"📧 Getting Gmail API service...", flush=True)
+            service = get_gmail_service()
+            if not service:
+                print(f"❌ Failed to get Gmail service", flush=True)
+                return
+            
+            print(f"📧 Encoding message...", flush=True)
+            raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
+            send_message = {'raw': raw_message}
+            
+            print(f"📧 Sending via Gmail API...", flush=True)
+            service.users().messages().send(userId='me', body=send_message).execute()
+            print(f"✅ Notificare trimisă către {DISPLAY_EMAIL} (via Gmail API)", flush=True)
         except Exception as e:
             print(f"❌ Admin notification error: {e}", flush=True)
             import traceback
@@ -195,7 +209,7 @@ def send_notification_to_admin(guest_name, guest_email, persons, response_type):
     return thread  # Returnează thread-ul pentru tracking
 
 def send_confirmation_email_to_guest(to_email, guest_name, persons):
-    """Trimite email de CONFIRMARE către invitat - GMAIL SMTP cu headers evenimente@unbr.ro"""
+    """Trimite email de CONFIRMARE către invitat - GMAIL API cu headers evenimente@unbr.ro"""
     def send():
         try:
             print(f"📧 Preparing confirmation email to {to_email}...", flush=True)
@@ -231,16 +245,20 @@ def send_confirmation_email_to_guest(to_email, guest_name, persons):
             msg['Subject'] = subject
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
-            # Trimite prin GMAIL SMTP (funcționează pe Render!)
-            print(f"📧 Connecting to Gmail SMTP...", flush=True)
-            with smtplib.SMTP('smtp.gmail.com', 587, timeout=30) as server:
-                print(f"📧 Connected! Starting TLS...", flush=True)
-                server.starttls()
-                print(f"📧 TLS started, logging in with Gmail...", flush=True)
-                server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
-                print(f"📧 Logged in, sending confirmation to guest...", flush=True)
-                server.send_message(msg)
-            print(f"✅ Email de confirmare trimis către {to_email} (via Gmail, from {DISPLAY_EMAIL})", flush=True)
+            # Trimite prin GMAIL API (funcționează pe Render!)
+            print(f"📧 Getting Gmail API service...", flush=True)
+            service = get_gmail_service()
+            if not service:
+                print(f"❌ Failed to get Gmail service", flush=True)
+                return
+            
+            print(f"📧 Encoding message...", flush=True)
+            raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
+            send_message = {'raw': raw_message}
+            
+            print(f"📧 Sending confirmation email via Gmail API...", flush=True)
+            service.users().messages().send(userId='me', body=send_message).execute()
+            print(f"✅ Email de confirmare trimis către {to_email} (via Gmail API, from {DISPLAY_EMAIL})", flush=True)
         except Exception as e:
             print(f"❌ Confirmation email error: {e}", flush=True)
             import traceback
