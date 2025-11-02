@@ -46,11 +46,30 @@ def get_credentials():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
     # Check if credentials are in environment variable (Render deployment)
-    env_creds = os.getenv('GOOGLE_CREDENTIALS')
     env_token = os.getenv('GOOGLE_TOKEN')
+    env_creds = os.getenv('GOOGLE_CREDENTIALS')
     
+    # Prioritate 1: GOOGLE_TOKEN (suficient pentru Render)
+    if env_token:
+        # Running on Render - use token from environment
+        import base64
+        token_path = '/tmp/token.pickle'
+        
+        try:
+            token_bytes = base64.b64decode(env_token)
+            with open(token_path, 'wb') as f:
+                f.write(token_bytes)
+            
+            with open(token_path, 'rb') as token:
+                creds = pickle.load(token)
+            
+            logger.info("✅ Loaded credentials from GOOGLE_TOKEN environment variable")
+            return creds
+        except Exception as e:
+            logger.error(f"Error loading GOOGLE_TOKEN: {e}")
+    
+    # Prioritate 2: GOOGLE_CREDENTIALS (pentru compatibilitate)
     if env_creds:
-        # Running on Render - use environment variables
         creds_data = json.loads(env_creds)
         creds_path = '/tmp/credentials.json'
         token_path = '/tmp/token.pickle'
@@ -58,14 +77,13 @@ def get_credentials():
         with open(creds_path, 'w') as f:
             json.dump(creds_data, f)
         
-        # Decode and save token if available
         if env_token:
             import base64
             token_bytes = base64.b64decode(env_token)
             with open(token_path, 'wb') as f:
                 f.write(token_bytes)
     else:
-        # Running locally
+        # Prioritate 3: Running locally
         creds_path = os.path.join(current_dir, 'credentials', 'credentials.json')
         token_path = os.path.join(current_dir, 'credentials', 'token.pickle')
 
