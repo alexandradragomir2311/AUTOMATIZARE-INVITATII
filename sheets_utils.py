@@ -33,11 +33,8 @@ RANGE_NAME = "'INVITATII SI CONFIRMARI'!A2:J"
 global FOLDER_ID
 FOLDER_ID = os.getenv('INVITATII_FOLDER_ID', '1sKIpA-6LOSfGJP-FumxYuWtkQAtUew8e')
 
-# Web App URL - URL-ul Google Apps Script Web App
-# Pentru a obține URL-ul:
-# 1. Deschide Google Apps Script Editor
-# 2. Deploy -> New deployment -> Type: Web app
-# SERVER RENDER.COM - accesibil 24/7 pentru confirmări
+# Web App URL - URL-ul pentru confirmări
+# RENDER cu PORT 465 SSL (în loc de 587 TLS)
 WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://automatizare-invitatii-1.onrender.com/confirm')
 
 def get_credentials():

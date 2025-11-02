@@ -18,8 +18,11 @@ import gspread
 
 app = Flask(__name__)
 
+# SMTP evenimente@unbr.ro - ÎNCERCĂM PORT 465 (SSL) în loc de 587 (TLS)
+# Render blochează port 587, dar 465 poate merge
 SMTP_SERVER = os.getenv('SMTP_SERVER', 'mail.unbr.ro')
-SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+SMTP_PORT = int(os.getenv('SMTP_PORT', '465'))
+SMTP_USE_SSL = os.getenv('SMTP_USE_SSL', 'true').lower() == 'true'
 EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS', 'evenimente@unbr.ro')
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD', '')
 SPREADSHEET_ID = '1-oAA8uUeDehcU-ckAHydsx8KujbXCWpZ0mMJIqWFoMg'
@@ -73,7 +76,7 @@ def get_email_from_sheet(token):
         return 'alexandradragomir23@yahoo.com'
 
 def send_email_background(to_email, subject, html_body):
-    """Trimite email în thread separat"""
+    """Trimite email în thread separat - PORT 465 SSL"""
     def send():
         try:
             msg = MIMEMultipart('alternative')
@@ -82,13 +85,23 @@ def send_email_background(to_email, subject, html_body):
             msg['Subject'] = subject
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
-            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-                server.starttls()
-                server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-                server.send_message(msg)
+            # Folosim SMTP_SSL pentru port 465
+            if SMTP_USE_SSL:
+                print(f"📧 Folosesc SMTP_SSL pe port {SMTP_PORT}")
+                with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+                    server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+                    server.send_message(msg)
+            else:
+                print(f"📧 Folosesc SMTP+STARTTLS pe port {SMTP_PORT}")
+                with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+                    server.starttls()
+                    server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+                    server.send_message(msg)
             print(f"✅ Email trimis: {to_email}")
         except Exception as e:
             print(f"❌ Email error: {e}")
+            import traceback
+            traceback.print_exc()
     
     # Start în background thread
     thread = threading.Thread(target=send, daemon=True)
