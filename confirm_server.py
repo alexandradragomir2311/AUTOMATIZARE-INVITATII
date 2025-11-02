@@ -31,24 +31,26 @@ def update_sheet_background(token, response, persons=None):
     """Update Google Sheet în background"""
     def update():
         try:
-            print(f"📊 Update Sheet: token={token[:15]}... resp={response} pers={persons}")
+            print(f"📊 Update Sheet: token={token[:15]}... resp={response} pers={persons}", flush=True)
             creds = get_credentials()
             client = gspread.authorize(creds)
             spreadsheet = client.open_by_key(SPREADSHEET_ID)
             sheet = spreadsheet.worksheet(SHEET_NAME)
             all_data = sheet.get_all_values()
+            print(f"📊 Loaded {len(all_data)} rows from sheet", flush=True)
             
             # Găsește row după token
             for i, row in enumerate(all_data[1:], start=2):
                 if len(row) > 9 and row[9] == token:
+                    print(f"📊 Found token in row {i}", flush=True)
                     if response == 'da':
                         sheet.update_cell(i, 8, f"✔ Da - {persons}")
                         sheet.update_cell(i, 9, persons)
-                        print(f"✅ Sheet updated: Da - {persons} persoane")
+                        print(f"✅ Sheet updated: Da - {persons} persoane", flush=True)
                         
                         # ⭐ LOGIC NOUĂ: Dacă 2 persoane, adaugă linie nouă
                         if persons == '2':
-                            print(f"👥 Confirmare 2 persoane - adaug linie nouă...")
+                            print(f"👥 Confirmare 2 persoane - adaug linie nouă...", flush=True)
                             # Copiază date din row original
                             nume = row[0] if len(row) > 0 else ''
                             prenume = row[1] if len(row) > 1 else ''
@@ -60,21 +62,23 @@ def update_sheet_background(token, response, persons=None):
                             new_row = [nume, prenume, functie, institutie, email, '', '', 
                                       'Confirmare 2/2', '1', token]
                             sheet.append_row(new_row)
-                            print(f"✅ Linie nouă adăugată pentru persoana 2/2")
+                            print(f"✅ Linie nouă adăugată pentru persoana 2/2", flush=True)
                     else:
                         sheet.update_cell(i, 8, '❌ Nu')
                         sheet.update_cell(i, 9, '-')
-                        print(f"✅ Sheet updated: Nu particip")
+                        print(f"✅ Sheet updated: Nu particip", flush=True)
                     return
-            print(f"⚠️ Token not found in Sheet")
+            print(f"⚠️ Token not found in Sheet", flush=True)
         except Exception as e:
-            print(f"❌ Sheet error: {e}")
+            print(f"❌ Sheet error: {e}", flush=True)
             import traceback
             traceback.print_exc()
     
     # Start în background thread
+    print(f"🔄 Launching Sheet update thread...", flush=True)
     thread = threading.Thread(target=update, daemon=True)
     thread.start()
+    print(f"🔄 Sheet thread started", flush=True)
 
 def get_email_from_sheet(token):
     """Găsește emailul din Sheet după token"""
@@ -96,6 +100,7 @@ def send_email_background(to_email, subject, html_body):
     """Trimite email în thread separat - evenimente@unbr.ro SMTP"""
     def send():
         try:
+            print(f"📧 Preparing email to {to_email}...", flush=True)
             msg = MIMEMultipart('alternative')
             msg['From'] = EMAIL_ADDRESS
             msg['To'] = to_email
@@ -103,21 +108,26 @@ def send_email_background(to_email, subject, html_body):
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
             # SMTP standard cu STARTTLS
-            print(f"📧 SMTP {SMTP_SERVER}:{SMTP_PORT}")
+            print(f"📧 Connecting to SMTP {SMTP_SERVER}:{SMTP_PORT}...", flush=True)
             with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+                print(f"📧 Connected! Starting TLS={SMTP_USE_TLS}...", flush=True)
                 if SMTP_USE_TLS:
                     server.starttls()
+                    print(f"📧 TLS started, logging in...", flush=True)
                 server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+                print(f"📧 Logged in, sending...", flush=True)
                 server.send_message(msg)
-            print(f"✅ Email trimis: {to_email}")
+            print(f"✅ Email trimis: {to_email}", flush=True)
         except Exception as e:
-            print(f"❌ Email error: {e}")
+            print(f"❌ Email error: {e}", flush=True)
             import traceback
             traceback.print_exc()
     
     # Start în background thread
+    print(f"🔄 Launching email send thread...", flush=True)
     thread = threading.Thread(target=send, daemon=True)
     thread.start()
+    print(f"🔄 Email thread started", flush=True)
 
 @app.route('/')
 def home():
@@ -161,13 +171,19 @@ a:hover { opacity: 0.9; }
         """, token=token)
     
     if resp == 'da':
+        print(f"🎯 CONFIRMARE DA - persoane={persoane}, token={token[:15]}...", flush=True)
+        
         # UPDATE GOOGLE SHEET ÎN BACKGROUND
+        print(f"📊 Starting Sheet update thread...", flush=True)
         update_sheet_background(token, 'da', persoane)
         
         # GĂSEȘTE EMAIL DIN SHEET
+        print(f"📧 Getting email from sheet...", flush=True)
         guest_email = get_email_from_sheet(token)
+        print(f"📧 Found email: {guest_email}", flush=True)
         
         # TRIMITE EMAIL ÎN BACKGROUND
+        print(f"📧 Starting email send thread...", flush=True)
         send_email_background(
             guest_email,
             '✅ Confirmare - Concert UNBR',
