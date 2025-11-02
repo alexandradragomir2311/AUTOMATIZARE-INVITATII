@@ -49,7 +49,8 @@ def update_sheet_background(token, response, persons=None):
                         print(f"✅ Sheet updated: Da - {persons} persoane", flush=True)
                         
                         # ⭐ LOGIC NOUĂ: Dacă 2 persoane, adaugă linie nouă
-                        if persons == '2':
+                        print(f"🔍 Checking persons: '{persons}' (type: {type(persons).__name__})", flush=True)
+                        if str(persons) == '2':
                             print(f"👥 Confirmare 2 persoane - adaug linie nouă...", flush=True)
                             # Copiază date din row original
                             nume = row[0] if len(row) > 0 else ''
