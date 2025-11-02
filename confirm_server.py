@@ -326,14 +326,23 @@ def confirm():
             
             # Trimite email confirmare prin SMTP UNBR - SIMPLU CA PE GMAIL!
             try:
-                from smtp_utils import send_email_smtp
+                import smtplib
                 from email_organization import create_confirmation_response_email
+                from email_config import EmailConfig
                 
+                config = EmailConfig.load_from_file()
                 msg = create_confirmation_response_email(nume, "confirmare", email)
-                send_email_smtp(msg, email)
+                
+                with smtplib.SMTP(config.smtp_server, config.smtp_port) as server:
+                    server.starttls()
+                    server.login(config.email_address, config.email_password)
+                    server.send_message(msg)
+                
                 print(f"✅ Email confirmare trimis către {email}", file=sys.stderr)
             except Exception as email_error:
                 print(f"❌ EROARE email: {email_error}", file=sys.stderr)
+                import traceback
+                traceback.print_exc()
             
             # Determină titlul pentru mesaj
             if gen:
@@ -381,14 +390,23 @@ def confirm():
             
             # Trimite email declinare prin SMTP UNBR - SIMPLU CA PE GMAIL!
             try:
-                from smtp_utils import send_email_smtp
+                import smtplib
                 from email_organization import create_confirmation_response_email
+                from email_config import EmailConfig
                 
+                config = EmailConfig.load_from_file()
                 msg = create_confirmation_response_email(nume, "declinare", email)
-                send_email_smtp(msg, email)
+                
+                with smtplib.SMTP(config.smtp_server, config.smtp_port) as server:
+                    server.starttls()
+                    server.login(config.email_address, config.email_password)
+                    server.send_message(msg)
+                
                 print(f"✅ Email declinare trimis către {email}", file=sys.stderr)
             except Exception as email_error:
                 print(f"❌ EROARE email: {email_error}", file=sys.stderr)
+                import traceback
+                traceback.print_exc()
             
             # Determină titlul pentru mesaj
             if gen:
