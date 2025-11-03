@@ -1,6 +1,6 @@
 """
 CONFIRM SERVER - ASYNC EMAIL + GOOGLE SHEETS
-Trimite email în background prin Gmail API, răspunde INSTANT, update Google Sheet
+Trimite email în background prin SMTP UNBR, răspunde INSTANT, update Google Sheet
 """
 
 from flask import Flask, request, render_template_string
@@ -10,6 +10,9 @@ import os
 import threading
 import sys
 import base64
+import time
+import imaplib
+import smtplib
 
 # Import sheets_utils pentru Google Sheets
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -160,6 +163,66 @@ def get_gender_from_sheet(token):
     except:
         return 'Doamnă'
 
+def get_email_config():
+    """Load email config from credentials/email_credentials.txt"""
+    from email_config import EmailConfig
+    
+    # Try multiple paths (VPS vs local)
+    possible_paths = [
+        'credentials/email_credentials.txt',
+        '/root/AUTOMATIZARE-INVITATII/credentials/email_credentials.txt'
+    ]
+    
+    for config_path in possible_paths:
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    lines = f.read().strip().split('\n')
+                    if len(lines) >= 4:
+                        config = EmailConfig()
+                        config.smtp_server = lines[0]
+                        config.smtp_port = int(lines[1])
+                        config.email_address = lines[2]
+                        config.email_password = lines[3]
+                        config.imap_server = lines[0]  # Same as SMTP
+                        print(f"✅ Loaded email config from {config_path}", flush=True)
+                        return config
+            except Exception as e:
+                print(f"❌ Error loading config from {config_path}: {e}", flush=True)
+                continue
+    
+    print("❌ Could not load email config from any path", flush=True)
+    return None
+
+def save_to_imap_folder(msg, config, folder_name):
+    """Save sent email to IMAP folder"""
+    try:
+        print(f"📧 Connecting to IMAP server {config.imap_server}...", flush=True)
+        imap = imaplib.IMAP4_SSL(config.imap_server)
+        imap.login(config.email_address, config.email_password)
+        print(f"✅ IMAP login successful", flush=True)
+        
+        # Check if folder exists, create if not
+        status, folders = imap.list()
+        folder_exists = False
+        for f in folders:
+            if folder_name.encode() in f:
+                folder_exists = True
+                break
+        
+        if not folder_exists:
+            print(f"📁 Creating IMAP folder: {folder_name}", flush=True)
+            imap.create(folder_name)
+        
+        # Append message to folder
+        imap.append(folder_name, '\\Seen', imaplib.Time2Internaldate(time.time()), msg.as_bytes())
+        imap.logout()
+        print(f"✅ Email saved to IMAP folder: {folder_name}", flush=True)
+    except Exception as e:
+        print(f"❌ IMAP save error: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+
 def send_decline_email_to_guest(to_email, guest_name, gender_title):
     """Trimite email de DECLINARE către invitat - SMTP UNBR"""
     def send():
@@ -204,20 +267,20 @@ def send_decline_email_to_guest(to_email, guest_name, gender_title):
             
             # Trimite prin SMTP UNBR
             print(f"📧 Connecting to SMTP server...", flush=True)
-            import smtplib
-            with open('/root/AUTOMATIZARE-INVITATII/credentials/email_credentials.txt', 'r') as f:
-                lines = f.read().strip().split('\n')
-                smtp_server = lines[0]
-                smtp_port = int(lines[1])
-                smtp_user = lines[2]
-                smtp_password = lines[3]
+            config = get_email_config()
+            if not config:
+                print(f"❌ Could not load email config", flush=True)
+                return
             
-            with smtplib.SMTP(smtp_server, smtp_port) as server:
-                server.starttls()
-                server.login(smtp_user, smtp_password)
-                server.send_message(msg)
+            server = smtplib.SMTP(config.smtp_server, config.smtp_port)
+            server.starttls()
+            server.login(config.email_address, config.email_password)
+            server.send_message(msg)
+            server.quit()
+            print(f"✅ Email de declinare trimis către {to_email} (via SMTP {config.email_address})", flush=True)
             
-            print(f"✅ Email de declinare trimis către {to_email} (via SMTP evenimente@unbr.ro)", flush=True)
+            # Salvează în folder IMAP
+            save_to_imap_folder(msg, config, 'Confirmari Concert 2025')
         except Exception as e:
             print(f"❌ Decline email error: {e}", flush=True)
             import traceback
@@ -272,30 +335,20 @@ def send_notification_to_admin(guest_name, guest_email, persons, response_type):
             
             # Trimite prin SMTP UNBR + Salvează în folder Confirmari Concert
             print(f"📧 Connecting to SMTP server...", flush=True)
-            import smtplib, imaplib
-            with open('/root/AUTOMATIZARE-INVITATII/credentials/email_credentials.txt', 'r') as f:
-                lines = f.read().strip().split('\n')
-                smtp_server = lines[0]
-                smtp_port = int(lines[1])
-                smtp_user = lines[2]
-                smtp_password = lines[3]
+            config = get_email_config()
+            if not config:
+                print(f"❌ Could not load email config", flush=True)
+                return
             
-            with smtplib.SMTP(smtp_server, smtp_port) as server:
-                server.starttls()
-                server.login(smtp_user, smtp_password)
-                server.send_message(msg)
+            server = smtplib.SMTP(config.smtp_server, config.smtp_port)
+            server.starttls()
+            server.login(config.email_address, config.email_password)
+            server.send_message(msg)
+            server.quit()
+            print(f"✅ Notificare trimisă către {config.email_address} (via SMTP)", flush=True)
             
-            # Salvează în folderul "Confirmari Concert" via IMAP
-            try:
-                imap = imaplib.IMAP4_SSL(smtp_server.replace('mail', 'imap'))
-                imap.login(smtp_user, smtp_password)
-                imap.append('Confirmari Concert', '', imaplib.Time2Internaldate(time.time()), msg.as_bytes())
-                imap.logout()
-                print(f"📁 Email salvat în folderul 'Confirmari Concert'", flush=True)
-            except:
-                print(f"⚠️ Email trimis dar nu s-a salvat în folder", flush=True)
-            
-            print(f"✅ Notificare trimisă către evenimente@unbr.ro (via SMTP)", flush=True)
+            # Salvează în folder IMAP
+            save_to_imap_folder(msg, config, 'Confirmari Concert 2025')
         except Exception as e:
             print(f"❌ Admin notification error: {e}", flush=True)
             import traceback
@@ -361,20 +414,20 @@ def send_confirmation_email_to_guest(to_email, guest_name, persons, gender_title
             
             # Trimite prin SMTP UNBR
             print(f"📧 Connecting to SMTP server...", flush=True)
-            import smtplib
-            with open('/root/AUTOMATIZARE-INVITATII/credentials/email_credentials.txt', 'r') as f:
-                lines = f.read().strip().split('\n')
-                smtp_server = lines[0]
-                smtp_port = int(lines[1])
-                smtp_user = lines[2]
-                smtp_password = lines[3]
+            config = get_email_config()
+            if not config:
+                print(f"❌ Could not load email config", flush=True)
+                return
             
-            with smtplib.SMTP(smtp_server, smtp_port) as server:
-                server.starttls()
-                server.login(smtp_user, smtp_password)
-                server.send_message(msg)
+            server = smtplib.SMTP(config.smtp_server, config.smtp_port)
+            server.starttls()
+            server.login(config.email_address, config.email_password)
+            server.send_message(msg)
+            server.quit()
+            print(f"✅ Email de confirmare trimis către {to_email} (via SMTP {config.email_address})", flush=True)
             
-            print(f"✅ Email de confirmare trimis către {to_email} (via SMTP evenimente@unbr.ro)", flush=True)
+            # Salvează în folder IMAP
+            save_to_imap_folder(msg, config, 'Confirmari Concert 2025')
         except Exception as e:
             print(f"❌ Confirmation email error: {e}", flush=True)
             import traceback
