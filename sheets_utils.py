@@ -19,11 +19,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# API Configuration - Gmail removed, only keeping Sheets, Docs and Drive
+# API Configuration - Gmail API added for sending confirmation emails
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/documents.readonly',
-    'https://www.googleapis.com/auth/drive.readonly'
+    'https://www.googleapis.com/auth/drive.readonly',
+    'https://www.googleapis.com/auth/gmail.send'
 ]
 DOCS_TEMPLATE_ID = '1GutvcK4_2pMSw2cccMliJ6JWp0cuvUUel1LP4IIOfuY'
 SPREADSHEET_ID = '1-oAA8uUeDehcU-ckAHydsx8KujbXCWpZ0mMJIqWFoMg'

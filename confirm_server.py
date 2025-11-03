@@ -142,6 +142,74 @@ def get_name_from_sheet(token):
     except:
         return 'Invitat'
 
+def send_decline_email_to_guest(to_email, guest_name):
+    """Trimite email de DECLINARE către invitat - Gmail API"""
+    def send():
+        try:
+            print(f"📧 Preparing decline email to {to_email}...", flush=True)
+            
+            subject = f"Răspuns înregistrat - Concert Omagial UNBR 24 noiembrie 2025"
+            html_body = f"""
+            <html><body style="font-family: Arial; padding: 20px; background: #f5f5f5;">
+            <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                <p style="font-size: 16px; color: #333;">Bună ziua Doamnă <strong>{guest_name}</strong>,</p>
+                
+                <p style="font-size: 16px; color: #333; line-height: 1.6;">Vă mulțumim pentru răspuns!</p>
+                
+                <p style="font-size: 16px; color: #555; line-height: 1.6; margin-top: 20px;">Ne pare rău că nu puteți participa la concertul omagial UNBR din 24 noiembrie 2025. Am înregistrat răspunsul dumneavoastră.</p>
+                
+                <p style="font-size: 16px; color: #333; line-height: 1.6; margin-top: 20px;">Sperăm să vă revedem la următoarele evenimente UNBR!</p>
+                
+                <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 25px 0;">
+                    <p style="margin: 5px 0; font-size: 14px; color: #555;">Pentru orice întrebări, nu ezitați să ne contactați:</p>
+                    <p style="margin: 8px 0; font-size: 14px; color: #333;">📧 <strong>Email:</strong> evenimente@unbr.ro</p>
+                    <p style="margin: 5px 0; font-size: 14px; color: #333;">Alexandra DRAGOMIR 📞 <strong>Telefon:</strong> 0740.318.791</p>
+                    <p style="margin: 5px 0; font-size: 14px; color: #333;">Veronica MORECUȚ 📞 <strong>Telefon:</strong> 0722.687.867</p>
+                </div>
+                
+                <p style="font-size: 15px; color: #333; margin-top: 25px;">Cu stimă,</p>
+                <p style="font-size: 15px; color: #333; margin: 5px 0;"><strong>Echipa de organizare</strong></p>
+                <p style="font-size: 14px; color: #666; margin: 0;">Uniunea Națională a Barourilor din România</p>
+                
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                <p style="font-size: 12px; color: #999; text-align: center;">Acest email a fost trimis automat. Pentru întrebări, răspundeți la acest email.</p>
+            </div>
+            </body></html>
+            """
+            
+            msg = MIMEMultipart('alternative')
+            msg['From'] = f"UNBR Evenimente <{DISPLAY_EMAIL}>"
+            msg['Reply-To'] = DISPLAY_EMAIL
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+            
+            # Trimite prin GMAIL API
+            print(f"📧 Getting Gmail API service...", flush=True)
+            service = get_gmail_service()
+            if not service:
+                print(f"❌ Failed to get Gmail service", flush=True)
+                return
+            
+            print(f"📧 Encoding message...", flush=True)
+            raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
+            send_message = {'raw': raw_message}
+            
+            print(f"📧 Sending decline email via Gmail API...", flush=True)
+            service.users().messages().send(userId='me', body=send_message).execute()
+            print(f"✅ Email de declinare trimis către {to_email} (via Gmail API, from {DISPLAY_EMAIL})", flush=True)
+        except Exception as e:
+            print(f"❌ Decline email error: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+    
+    # Start în background thread
+    print(f"🔄 Launching decline email thread...", flush=True)
+    thread = threading.Thread(target=send, daemon=True)
+    thread.start()
+    print(f"🔄 Decline email thread started", flush=True)
+    return thread
+
 def send_notification_to_admin(guest_name, guest_email, persons, response_type):
     """Trimite notificare către evenimente@unbr.ro când cineva confirmă - GMAIL API"""
     def send():
@@ -214,23 +282,37 @@ def send_confirmation_email_to_guest(to_email, guest_name, persons):
         try:
             print(f"📧 Preparing confirmation email to {to_email}...", flush=True)
             
-            subject = f"✅ Confirmare participare - Concert UNBR 24 noiembrie 2025"
+            # Determină pluralul pentru bilete
+            bilet_text = "biletul" if persons == '1' else "biletele"
+            
+            subject = f"✅ Confirmare participare - Concert Omagial UNBR 24 noiembrie 2025"
             html_body = f"""
             <html><body style="font-family: Arial; padding: 20px; background: #f5f5f5;">
             <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <h1 style="color: #4CAF50; text-align: center;">✅ Confirmare Primită</h1>
-                <p style="font-size: 16px;">Bună ziua <strong>{guest_name}</strong>,</p>
-                <p style="font-size: 16px;">Am înregistrat confirmarea dumneavoastră pentru <strong>{persons} {'persoană' if persons == '1' else 'persoane'}</strong> la concertul din 24 noiembrie 2025.</p>
+                <p style="font-size: 16px; color: #333;">Bună ziua, Doamnă <strong>{guest_name}</strong>,</p>
                 
-                <div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    <h3 style="margin-top: 0; color: #333;">📅 Detalii eveniment:</h3>
-                    <p style="margin: 5px 0;"><strong>Data:</strong> 24 noiembrie 2025</p>
-                    <p style="margin: 5px 0;"><strong>Organizator:</strong> UNBR</p>
-                    <p style="margin: 5px 0;"><strong>Persoane confirmate:</strong> {persons}</p>
+                <p style="font-size: 16px; color: #333; line-height: 1.6;">Vă mulțumim pentru confirmarea participării la concertul omagial UNBR!</p>
+                
+                <div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+                    <h3 style="margin-top: 0; color: #333; font-size: 18px;">Detalii confirmare:</h3>
+                    <p style="margin: 8px 0; font-size: 15px;">✅ <strong>Participare confirmată pentru:</strong> {persons} {'persoană' if persons == '1' else 'persoane'}</p>
+                    <p style="margin: 8px 0; font-size: 15px;">📅 <strong>Data:</strong> 24 noiembrie 2025</p>
+                    <p style="margin: 8px 0; font-size: 15px;">🕐 <strong>Ora:</strong> 19:30</p>
+                    <p style="margin: 8px 0; font-size: 15px;">📍 <strong>Locație:</strong> Ateneul Român, București</p>
                 </div>
                 
-                <p style="font-size: 14px; color: #666; margin-top: 30px;">Vă așteptăm cu drag!</p>
-                <p style="font-size: 14px; color: #666;">Cu stimă,<br><strong>Echipa UNBR</strong></p>
+                <p style="font-size: 15px; color: #333; margin-top: 20px;">Veți primi în curând <strong>{bilet_text} de acces</strong> pe email.</p>
+                
+                <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 25px 0;">
+                    <p style="margin: 5px 0; font-size: 14px; color: #555;">Pentru orice întrebări, nu ezitați să ne contactați:</p>
+                    <p style="margin: 8px 0; font-size: 14px; color: #333;">📧 <strong>Email:</strong> evenimente@unbr.ro</p>
+                    <p style="margin: 5px 0; font-size: 14px; color: #333;">Alexandra DRAGOMIR 📞 <strong>Telefon:</strong> 0740.318.791</p>
+                    <p style="margin: 5px 0; font-size: 14px; color: #333;">Veronica MORECUȚ 📞 <strong>Telefon:</strong> 0722.687.867</p>
+                </div>
+                
+                <p style="font-size: 15px; color: #333; margin-top: 25px;">Cu stimă,</p>
+                <p style="font-size: 15px; color: #333; margin: 5px 0;"><strong>Echipa de organizare</strong></p>
+                <p style="font-size: 14px; color: #666; margin: 0;">Uniunea Națională a Barourilor din România</p>
                 
                 <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
                 <p style="font-size: 12px; color: #999; text-align: center;">Acest email a fost trimis automat. Pentru întrebări, răspundeți la acest email.</p>
@@ -364,15 +446,26 @@ p { color: #666; }
         """, persoane=persoane, email=guest_email)
     
     else:
-        # UPDATE GOOGLE SHEET ÎN BACKGROUND
-        sheet_thread = update_sheet_background(token, 'nu', None)
+        # DECLINARE - Nu participă
+        print(f"🎯 DECLINARE - token={token[:15]}...", flush=True)
         
         # GĂSEȘTE DATELE INVITATULUI DIN SHEET
+        print(f"📧 Getting guest info from sheet...", flush=True)
         guest_email = get_email_from_sheet(token)
         guest_name = get_name_from_sheet(token)
+        print(f"📧 Found: {guest_name} ({guest_email})", flush=True)
         
-        # TRIMITE NOTIFICARE CĂTRE evenimente@unbr.ro
-        email_thread = send_notification_to_admin(
+        # 1. UPDATE GOOGLE SHEET ÎN BACKGROUND
+        print(f"📊 Starting Sheet update thread...", flush=True)
+        sheet_thread = update_sheet_background(token, 'nu', None)
+        
+        # 2. TRIMITE EMAIL DE DECLINARE CĂTRE INVITAT
+        print(f"📧 Sending decline email to guest...", flush=True)
+        guest_email_thread = send_decline_email_to_guest(guest_email, guest_name)
+        
+        # 3. TRIMITE NOTIFICARE CĂTRE evenimente@unbr.ro
+        print(f"📧 Sending notification to admin...", flush=True)
+        admin_email_thread = send_notification_to_admin(
             guest_name,
             guest_email,
             '0',
