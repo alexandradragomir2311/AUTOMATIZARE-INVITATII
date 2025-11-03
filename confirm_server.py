@@ -392,23 +392,82 @@ def confirm():
         return render_template_string("""
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Confirmare</title>
+<title>Confirmare Participare - Concert UNBR</title>
 <style>
-body { font-family: Arial; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; margin: 0; display: flex; align-items: center; justify-content: center; }
-.box { background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); max-width: 400px; }
-h1 { color: #333; margin: 0 0 20px 0; }
-h2 { color: #666; font-weight: normal; margin: 0 0 30px 0; }
-a { display: block; padding: 15px; margin: 10px 0; background: #4CAF50; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-a:hover { opacity: 0.9; }
-.no { background: #f44336; }
+body { 
+    font-family: 'Georgia', serif; 
+    text-align: center; 
+    padding: 20px; 
+    background: linear-gradient(135deg, #8B4513 0%, #D4AF37 50%, #8B4513 100%); 
+    min-height: 100vh; 
+    margin: 0; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+}
+.box { 
+    background: #FFF8E7; 
+    padding: 40px 30px; 
+    border-radius: 20px; 
+    box-shadow: 0 15px 50px rgba(139, 69, 19, 0.4); 
+    max-width: 450px; 
+    border: 3px solid #D4AF37;
+}
+h1 { 
+    color: #8B4513; 
+    margin: 0 0 10px 0; 
+    font-size: 28px;
+    text-shadow: 1px 1px 2px rgba(212, 175, 55, 0.3);
+}
+h2 { 
+    color: #A0826D; 
+    font-weight: normal; 
+    margin: 0 0 10px 0; 
+    font-size: 18px;
+}
+.subtitle {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 30px;
+}
+a { 
+    display: block; 
+    padding: 18px; 
+    margin: 15px 0; 
+    background: linear-gradient(135deg, #D4AF37 0%, #FFD700 100%); 
+    color: #8B4513; 
+    text-decoration: none; 
+    border-radius: 12px; 
+    font-weight: bold; 
+    cursor: pointer; 
+    font-size: 16px;
+    border: 2px solid #B8941F;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+}
+a:hover { 
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.5);
+    background: linear-gradient(135deg, #FFD700 0%, #D4AF37 100%);
+}
+.no { 
+    background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%); 
+    color: white;
+    border: 2px solid #654321;
+}
+.no:hover {
+    background: linear-gradient(135deg, #A0522D 0%, #8B4513 100%);
+}
+.icon { font-size: 24px; margin-right: 8px; }
 </style>
 </head><body>
 <div class="box">
-<h1>🎵 Concert UNBR</h1>
-<h2>24 noiembrie 2025</h2>
-<a href="/confirm?token={{ token }}&resp=da&persoane=1">✔ Particip - 1</a>
-<a href="/confirm?token={{ token }}&resp=da&persoane=2">✔ Particip - 2</a>
-<a href="/confirm?token={{ token }}&resp=nu" class="no">✖ Nu particip</a>
+<h1>🎵 Concert Omagial UNBR</h1>
+<h2>24 noiembrie 2025, ora 19:30</h2>
+<p class="subtitle">📍 Ateneul Român, București</p>
+<a href="/confirm?token={{ token }}&resp=da&persoane=1"><span class="icon">✔</span>Confirm participarea - 1 loc</a>
+<a href="/confirm?token={{ token }}&resp=da&persoane=2"><span class="icon">✔✔</span>Confirm participarea - 2 locuri</a>
+<a href="/confirm?token={{ token }}&resp=nu" class="no"><span class="icon">✖</span>Nu pot participa</a>
 </div></body></html>
         """, token=token)
     
