@@ -142,7 +142,25 @@ def get_name_from_sheet(token):
     except:
         return 'Invitat'
 
-def send_decline_email_to_guest(to_email, guest_name):
+def get_gender_from_sheet(token):
+    """Găsește genul din Sheet după token (coloana C - index 2)"""
+    try:
+        creds = get_credentials()
+        client = gspread.authorize(creds)
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        sheet = spreadsheet.worksheet(SHEET_NAME)
+        all_data = sheet.get_all_values()
+        
+        for row in all_data[1:]:
+            if len(row) > 9 and row[9] == token:
+                gender = row[2] if len(row) > 2 else 'F'
+                # Returnează 'Doamnă' sau 'Domn' bazat pe gen
+                return 'Doamnă' if gender.upper() == 'F' else 'Domn'
+        return 'Doamnă'
+    except:
+        return 'Doamnă'
+
+def send_decline_email_to_guest(to_email, guest_name, gender_title):
     """Trimite email de DECLINARE către invitat - Gmail API"""
     def send():
         try:
@@ -152,7 +170,7 @@ def send_decline_email_to_guest(to_email, guest_name):
             html_body = f"""
             <html><body style="font-family: Arial; padding: 20px; background: #f5f5f5;">
             <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <p style="font-size: 16px; color: #333;">Bună ziua Doamnă <strong>{guest_name}</strong>,</p>
+                <p style="font-size: 16px; color: #333;">Bună ziua {gender_title} <strong>{guest_name}</strong>,</p>
                 
                 <p style="font-size: 16px; color: #333; line-height: 1.6;">Vă mulțumim pentru răspuns!</p>
                 
@@ -276,7 +294,7 @@ def send_notification_to_admin(guest_name, guest_email, persons, response_type):
     print(f"🔄 Admin notification thread started", flush=True)
     return thread  # Returnează thread-ul pentru tracking
 
-def send_confirmation_email_to_guest(to_email, guest_name, persons):
+def send_confirmation_email_to_guest(to_email, guest_name, persons, gender_title):
     """Trimite email de CONFIRMARE către invitat - GMAIL API cu headers evenimente@unbr.ro"""
     def send():
         try:
@@ -289,7 +307,7 @@ def send_confirmation_email_to_guest(to_email, guest_name, persons):
             html_body = f"""
             <html><body style="font-family: Arial; padding: 20px; background: #f5f5f5;">
             <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <p style="font-size: 16px; color: #333;">Bună ziua, Doamnă <strong>{guest_name}</strong>,</p>
+                <p style="font-size: 16px; color: #333;">Bună ziua, {gender_title} <strong>{guest_name}</strong>,</p>
                 
                 <p style="font-size: 16px; color: #333; line-height: 1.6;">Vă mulțumim pentru confirmarea participării la concertul omagial UNBR!</p>
                 
@@ -401,7 +419,8 @@ a:hover { opacity: 0.9; }
         print(f"📧 Getting guest info from sheet...", flush=True)
         guest_email = get_email_from_sheet(token)
         guest_name = get_name_from_sheet(token)
-        print(f"📧 Found: {guest_name} ({guest_email})", flush=True)
+        gender_title = get_gender_from_sheet(token)
+        print(f"📧 Found: {guest_name} ({guest_email}), Gender: {gender_title}", flush=True)
         
         # 1. UPDATE GOOGLE SHEET ÎN BACKGROUND
         print(f"📊 Starting Sheet update thread...", flush=True)
@@ -409,7 +428,7 @@ a:hover { opacity: 0.9; }
         
         # 2. TRIMITE EMAIL DE CONFIRMARE CĂTRE INVITAT (via Gmail, afișat ca evenimente@unbr.ro)
         print(f"📧 Sending confirmation email to guest...", flush=True)
-        guest_email_thread = send_confirmation_email_to_guest(guest_email, guest_name, persoane)
+        guest_email_thread = send_confirmation_email_to_guest(guest_email, guest_name, persoane, gender_title)
         
         # 3. TRIMITE NOTIFICARE CĂTRE evenimente@unbr.ro (DUBLĂ VERIFICARE)
         print(f"📧 Sending notification to admin...", flush=True)
@@ -453,7 +472,8 @@ p { color: #666; }
         print(f"📧 Getting guest info from sheet...", flush=True)
         guest_email = get_email_from_sheet(token)
         guest_name = get_name_from_sheet(token)
-        print(f"📧 Found: {guest_name} ({guest_email})", flush=True)
+        gender_title = get_gender_from_sheet(token)
+        print(f"📧 Found: {guest_name} ({guest_email}), Gender: {gender_title}", flush=True)
         
         # 1. UPDATE GOOGLE SHEET ÎN BACKGROUND
         print(f"📊 Starting Sheet update thread...", flush=True)
@@ -461,7 +481,7 @@ p { color: #666; }
         
         # 2. TRIMITE EMAIL DE DECLINARE CĂTRE INVITAT
         print(f"📧 Sending decline email to guest...", flush=True)
-        guest_email_thread = send_decline_email_to_guest(guest_email, guest_name)
+        guest_email_thread = send_decline_email_to_guest(guest_email, guest_name, gender_title)
         
         # 3. TRIMITE NOTIFICARE CĂTRE evenimente@unbr.ro
         print(f"📧 Sending notification to admin...", flush=True)
