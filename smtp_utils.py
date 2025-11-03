@@ -313,6 +313,15 @@ def send_email2_smtp(guest: Dict[str, str]) -> bool:
             print("Eroare: Nu am putut obține parola pentru email")
             return False
         
+        # Determină formula de adresare bazată pe gen
+        gen = guest.get('gen', '').strip().upper()
+        if gen == 'F':
+            gender_title = "Doamnă"
+        elif gen == 'M':
+            gender_title = "Domn"
+        else:
+            gender_title = "Doamnă"  # Default to Doamnă if gender not specified
+        
         # Creează mesajul cu același format ca originalul
         message = MIMEMultipart('related')
         message['From'] = formataddr(('Evenimente UNBR', config.email_address))
@@ -459,7 +468,7 @@ def send_email2_smtp(guest: Dict[str, str]) -> bool:
         <body>
             <div class="container">
                 <div class="content">
-                    <p class="greeting">Bună ziua,</p>
+                    <p class="greeting">Bună ziua, {gender_title} {guest.get('nume_complet', '')},</p>
                     <div class="invitation-text" style="margin-top: 20px; white-space: pre-line;">
                         {invitation_text}
                     </div>

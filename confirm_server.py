@@ -161,7 +161,7 @@ def get_gender_from_sheet(token):
         return 'Doamnă'
 
 def send_decline_email_to_guest(to_email, guest_name, gender_title):
-    """Trimite email de DECLINARE către invitat - Gmail API"""
+    """Trimite email de DECLINARE către invitat - SMTP UNBR"""
     def send():
         try:
             print(f"📧 Preparing decline email to {to_email}...", flush=True)
@@ -170,7 +170,7 @@ def send_decline_email_to_guest(to_email, guest_name, gender_title):
             html_body = f"""
             <html><body style="font-family: Arial; padding: 20px; background: #f5f5f5;">
             <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <p style="font-size: 16px; color: #333;">Bună ziua {gender_title} <strong>{guest_name}</strong>,</p>
+                <p style="font-size: 16px; color: #333;">Bună ziua,</p>
                 
                 <p style="font-size: 16px; color: #333; line-height: 1.6;">Vă mulțumim pentru răspuns!</p>
                 
@@ -196,26 +196,28 @@ def send_decline_email_to_guest(to_email, guest_name, gender_title):
             """
             
             msg = MIMEMultipart('alternative')
-            msg['From'] = f"UNBR Evenimente <{DISPLAY_EMAIL}>"
-            msg['Reply-To'] = DISPLAY_EMAIL
+            msg['From'] = f"Evenimente UNBR <evenimente@unbr.ro>"
+            msg['Reply-To'] = "evenimente@unbr.ro"
             msg['To'] = to_email
             msg['Subject'] = subject
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
-            # Trimite prin GMAIL API
-            print(f"📧 Getting Gmail API service...", flush=True)
-            service = get_gmail_service()
-            if not service:
-                print(f"❌ Failed to get Gmail service", flush=True)
-                return
+            # Trimite prin SMTP UNBR
+            print(f"📧 Connecting to SMTP server...", flush=True)
+            import smtplib
+            with open('/root/AUTOMATIZARE-INVITATII/credentials/email_credentials.txt', 'r') as f:
+                lines = f.read().strip().split('\n')
+                smtp_server = lines[0]
+                smtp_port = int(lines[1])
+                smtp_user = lines[2]
+                smtp_password = lines[3]
             
-            print(f"📧 Encoding message...", flush=True)
-            raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
-            send_message = {'raw': raw_message}
+            with smtplib.SMTP(smtp_server, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_password)
+                server.send_message(msg)
             
-            print(f"📧 Sending decline email via Gmail API...", flush=True)
-            service.users().messages().send(userId='me', body=send_message).execute()
-            print(f"✅ Email de declinare trimis către {to_email} (via Gmail API, from {DISPLAY_EMAIL})", flush=True)
+            print(f"✅ Email de declinare trimis către {to_email} (via SMTP evenimente@unbr.ro)", flush=True)
         except Exception as e:
             print(f"❌ Decline email error: {e}", flush=True)
             import traceback
@@ -229,10 +231,10 @@ def send_decline_email_to_guest(to_email, guest_name, gender_title):
     return thread
 
 def send_notification_to_admin(guest_name, guest_email, persons, response_type):
-    """Trimite notificare către evenimente@unbr.ro când cineva confirmă - GMAIL API"""
+    """Trimite notificare către evenimente@unbr.ro când cineva confirmă - SMTP UNBR"""
     def send():
         try:
-            print(f"📧 Preparing admin notification via Gmail API...", flush=True)
+            print(f"📧 Preparing admin notification via SMTP...", flush=True)
             
             # Construiește mesajul
             if response_type == 'confirmare':
@@ -262,26 +264,38 @@ def send_notification_to_admin(guest_name, guest_email, persons, response_type):
                 """
             
             msg = MIMEMultipart('alternative')
-            msg['From'] = f"UNBR Evenimente <{DISPLAY_EMAIL}>"  # Apare ca evenimente@unbr.ro
-            msg['Reply-To'] = DISPLAY_EMAIL  # Reply-urile merg la evenimente@unbr.ro
-            msg['To'] = DISPLAY_EMAIL  # Trimite către evenimente@unbr.ro
+            msg['From'] = "UNBR Confirmari <evenimente@unbr.ro>"
+            msg['Reply-To'] = "evenimente@unbr.ro"
+            msg['To'] = "evenimente@unbr.ro"
             msg['Subject'] = subject
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
-            # Trimite prin GMAIL API (funcționează pe Render!)
-            print(f"📧 Getting Gmail API service...", flush=True)
-            service = get_gmail_service()
-            if not service:
-                print(f"❌ Failed to get Gmail service", flush=True)
-                return
+            # Trimite prin SMTP UNBR + Salvează în folder Confirmari Concert
+            print(f"📧 Connecting to SMTP server...", flush=True)
+            import smtplib, imaplib
+            with open('/root/AUTOMATIZARE-INVITATII/credentials/email_credentials.txt', 'r') as f:
+                lines = f.read().strip().split('\n')
+                smtp_server = lines[0]
+                smtp_port = int(lines[1])
+                smtp_user = lines[2]
+                smtp_password = lines[3]
             
-            print(f"📧 Encoding message...", flush=True)
-            raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
-            send_message = {'raw': raw_message}
+            with smtplib.SMTP(smtp_server, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_password)
+                server.send_message(msg)
             
-            print(f"📧 Sending via Gmail API...", flush=True)
-            service.users().messages().send(userId='me', body=send_message).execute()
-            print(f"✅ Notificare trimisă către {DISPLAY_EMAIL} (via Gmail API)", flush=True)
+            # Salvează în folderul "Confirmari Concert" via IMAP
+            try:
+                imap = imaplib.IMAP4_SSL(smtp_server.replace('mail', 'imap'))
+                imap.login(smtp_user, smtp_password)
+                imap.append('Confirmari Concert', '', imaplib.Time2Internaldate(time.time()), msg.as_bytes())
+                imap.logout()
+                print(f"📁 Email salvat în folderul 'Confirmari Concert'", flush=True)
+            except:
+                print(f"⚠️ Email trimis dar nu s-a salvat în folder", flush=True)
+            
+            print(f"✅ Notificare trimisă către evenimente@unbr.ro (via SMTP)", flush=True)
         except Exception as e:
             print(f"❌ Admin notification error: {e}", flush=True)
             import traceback
@@ -307,7 +321,7 @@ def send_confirmation_email_to_guest(to_email, guest_name, persons, gender_title
             html_body = f"""
             <html><body style="font-family: Arial; padding: 20px; background: #f5f5f5;">
             <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <p style="font-size: 16px; color: #333;">Bună ziua, {gender_title} <strong>{guest_name}</strong>,</p>
+                <p style="font-size: 16px; color: #333;">Bună ziua,</p>
                 
                 <p style="font-size: 16px; color: #333; line-height: 1.6;">Vă mulțumim pentru confirmarea participării la concertul omagial UNBR!</p>
                 
@@ -339,26 +353,28 @@ def send_confirmation_email_to_guest(to_email, guest_name, persons, gender_title
             """
             
             msg = MIMEMultipart('alternative')
-            msg['From'] = f"UNBR Evenimente <{DISPLAY_EMAIL}>"  # Apare ca evenimente@unbr.ro
-            msg['Reply-To'] = DISPLAY_EMAIL  # Reply-urile merg la evenimente@unbr.ro
+            msg['From'] = "Evenimente UNBR <evenimente@unbr.ro>"
+            msg['Reply-To'] = "evenimente@unbr.ro"
             msg['To'] = to_email
             msg['Subject'] = subject
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
-            # Trimite prin GMAIL API (funcționează pe Render!)
-            print(f"📧 Getting Gmail API service...", flush=True)
-            service = get_gmail_service()
-            if not service:
-                print(f"❌ Failed to get Gmail service", flush=True)
-                return
+            # Trimite prin SMTP UNBR
+            print(f"📧 Connecting to SMTP server...", flush=True)
+            import smtplib
+            with open('/root/AUTOMATIZARE-INVITATII/credentials/email_credentials.txt', 'r') as f:
+                lines = f.read().strip().split('\n')
+                smtp_server = lines[0]
+                smtp_port = int(lines[1])
+                smtp_user = lines[2]
+                smtp_password = lines[3]
             
-            print(f"📧 Encoding message...", flush=True)
-            raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
-            send_message = {'raw': raw_message}
+            with smtplib.SMTP(smtp_server, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_password)
+                server.send_message(msg)
             
-            print(f"📧 Sending confirmation email via Gmail API...", flush=True)
-            service.users().messages().send(userId='me', body=send_message).execute()
-            print(f"✅ Email de confirmare trimis către {to_email} (via Gmail API, from {DISPLAY_EMAIL})", flush=True)
+            print(f"✅ Email de confirmare trimis către {to_email} (via SMTP evenimente@unbr.ro)", flush=True)
         except Exception as e:
             print(f"❌ Confirmation email error: {e}", flush=True)
             import traceback
