@@ -35,8 +35,8 @@ global FOLDER_ID
 FOLDER_ID = os.getenv('INVITATII_FOLDER_ID', '1sKIpA-6LOSfGJP-FumxYuWtkQAtUew8e')
 
 # Web App URL - URL-ul pentru confirmări
-# RENDER cu PORT 465 SSL (în loc de 587 TLS)
-WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://automatizare-invitatii-1.onrender.com/confirm')
+# VPS CONTABO - Server propriu cu SMTP complet funcțional
+WEBAPP_URL = os.getenv('WEBAPP_URL', 'http://45.8.133.159:5000/confirm')
 
 def get_credentials():
     """Get and refresh OAuth 2.0 credentials"""
